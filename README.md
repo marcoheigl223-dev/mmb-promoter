@@ -1,3 +1,18 @@
+# mmb-promoter — Promoter-Netzwerk (eigenständiges Projekt)
+
+Vertriebs-/Promoter-System für Bootstouren auf Mallorca. **Vollständig getrennt von MyMallorcaBoats** (eigene Datenbank, Domain, Login, Deployment, Repo) — siehe [ADR-0001](docs/decisions/0001-vollstaendig-getrennt-von-mymallorcaboats.md).
+
+- **Projektregeln:** [`AGENTS.md`](AGENTS.md) (wird über `CLAUDE.md` in jede Claude-Session geladen)
+- **Doku-System:** [`docs/README.md`](docs/README.md) — Changelog, Entscheidungen, Risiken, Fortschritt, Aufgaben
+- **Lokal starten:** `supabase start` (Ports 4532x, braucht `supabase/.env.local` — Vorlage `supabase/.env.example`), dann `npm run dev` → http://127.0.0.1:3001
+- **Env:** `.env.local` nach Vorlage `.env.local.example`, Werte aus `supabase status`
+
+Stand 16.09.2026: Fundament + Doku, noch keine Features, keine Migration.
+
+---
+
+## Create-Next-App-Boilerplate (Original-README)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
