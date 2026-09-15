@@ -23,7 +23,7 @@ Kein Feature, keine Migration, kein Schema.
 - [x] **Schritt 1 — Doku-System angelegt** · `AGENTS.md` (Projektregeln), `CLAUDE.md`, `docs/README.md`, `docs/CHANGELOG.md`, `docs/DECISIONS.md`, `docs/RISKS.md`, `PROGRESS.md`, `TASKS.md`, `docs/decisions/` (README, Vorlage, ADR-0001), `docs/research/`, `docs/handover/` (je README mit Ablage-Anweisung)
 - [x] **Schritt 2 — Lokale Supabase-Instanz** · `supabase init`, `project_id "mmb-promoter"`, Ports 4532x (Abweichung von 5532x begründet in `docs/DECISIONS.md`), eigenes JWT-Secret via `env()`, `supabase start` + `supabase status` erfolgreich, Boots-Instanz lief parallel
 - [x] **Schritt 3 — Dev-Server auf 3001** · `package.json` `dev`/`start` mit `-p 3001`; `.env.local.example`; `.gitignore`-Ausnahmen für Vorlagen
-- [ ] **Schritt 4 — Erster Commit** · `git diff` gezeigt, gezielt per Pfad committet (Hash in `docs/CHANGELOG.md` nachtragen)
+- [x] **Schritt 4 — Erster Commit** · `git diff` gezeigt, gezielt per Pfad committet — `8c434d6` (Hash in `docs/CHANGELOG.md` nachgetragen)
 
 ## Manuelle Schritte für Marco (16.09.2026)
 
