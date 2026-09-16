@@ -4,7 +4,9 @@
 
 ## Aktuelle Aufgabe
 
-**Fundament + Doku-System — abgeschlossen (16.09.2026).** Keine Features gebaut (Auftrag Marco). Nächster Schritt: Marco kopiert die Übergabe-Dateien (siehe `TASKS.md`, „Manuelle Schritte für Marco"), dann Etappenplanung.
+**Etappenplan liegt Marco zur Bestätigung vor (16.09.2026, `TASKS.md` Phase 1).** Es wird **nichts gebaut**, bis Marco den Plan bestätigt. Geschäftsregeln (Anzahlung, Provision, 10+1, Kontingent) sind in `docs/DECISIONS.md` verankert; Storno-Provision bewusst offen (F10).
+
+Zur Bestätigung durch Marco vor E1: die Design-Annahme „`capacity_total` = Kontingent" (TASKS Phase 1, Kopf). Vor E5: F11 (Anzahlung bei Gratisplatz), F12 (Option A/B Funktions-Anpassung).
 
 ## Wiedereinstieg — Befehle und Pfade
 
@@ -25,17 +27,16 @@ supabase stop           # Instanz stoppen (DB bleibt erhalten)
 | Container-Präfix | `supabase_*_mmb-promoter` |
 | JWT-Secret | `supabase/.env.local` (gitignored) |
 
-Stand 16.09.2026, 01:35: `supabase start` erfolgreich, `supabase status` liefert die URLs oben; `JWT_SECRET` in der Ausgabe entspricht dem eigenen Wert aus `.env.local` (also nicht der CLI-Default). Boots-Instanz (`supabase_*_web`, 543xx) lief parallel weiter. Hinweis: CLI meldet Update v2.117.0 verfügbar (installiert 2.108.0) — nicht gemacht, kein Auftrag.
+Stand 16.09.2026: Instanz läuft, `JWT_SECRET` = eigener Wert; `next dev -p 3001` „Ready". CLI meldet Update v2.117.0 (installiert 2.108.0) — nicht gemacht, kein Auftrag.
 
-## Was noch NICHT existiert
+## Was existiert / was nicht
 
-- Keine Migration in `supabase/migrations/` (Ordner leer bis Etappe 1).
-- Kein `.env.local` im Root (Vorlage vorhanden; Werte aus `supabase status`).
-- Kein Testrunner (RISKS Nr. 8).
-- `src/app/*` ist das unveränderte Create-Next-App-Gerüst.
-- `docs/research/` und `docs/handover/` sind leer bis Marco kopiert (RISKS Nr. 19).
+- `docs/handover/reserve-function-final.sql` liegt vor (byteidentisch zur Boots-Quelle). Braucht `tour_departures`, `bookings`, Enums `booking_channel`/`payment_type`/`booking_status`; schreibt fest `online`/`full` (RISKS Nr. 23).
+- `docs/research/` enthält beide Recherchen (Index im README).
+- **Keine** Migration, **kein** Testrunner, **kein** `.env.local` im Root (M5 offen), `src/app/*` unverändertes Gerüst.
 
 ## Warnungen für den Wiedereinstieg
 
-- Ports sind **4532x**, nicht 5532x wie ursprünglich beauftragt — Windows-Portreservierung, siehe `docs/DECISIONS.md` 16.09.
-- `next dev` schreibt den Next.js-Block oben in `AGENTS.md` bei jedem Start neu; die Projektregeln stehen darunter und bleiben erhalten. Diff nach `npm run dev` deshalb nicht wundern.
+- Ports sind **4532x**, nicht 5532x — Windows-Portreservierung, `docs/DECISIONS.md` 16.09.
+- `next dev` schreibt den Next.js-Block oben in `AGENTS.md` neu; Projektregeln darunter bleiben. Diff danach nicht wundern.
+- Storno-Provision (F10) **nicht erfinden** — Marco hat sie ausdrücklich offen gelassen.

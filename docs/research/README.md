@@ -17,4 +17,6 @@ Optional, als Referenz nützlich: `C:\Projects\MyMallorcaExperience\docs\PROMOTE
 
 | Datei | Datum | Thema | Stand |
 |---|---|---|---|
-| _(noch leer — siehe Ablage-Anweisung)_ | | | |
+| `2026-09-14_trennung-recht-technik-risiken.md` | 14.09.2026 | Recherchebericht: boote-neutrale Buchungsplattform + separates Promoter-Netzwerk — Fakten, Recht (Ley 12/1992, Ley 8/2012, DSGVO, RD 1188/2025), Technik, Risiken. **Kein Rechtsrat.** | abgelegt 16.09.2026 (295 Zeilen, vollständig geprüft) |
+| `2026-09_technischer-umsetzungsplan-trennung.md` | Sept. 2026 | Technischer Umsetzungsplan der Trennung: Polyrepo, eigene Supabase-Instanz/Ports/`jwt_secret`, Migration ab 0001, Neubau statt Kopie, Enum-/Lock-Hinweise | abgelegt 16.09.2026 (290 Zeilen, vollständig geprüft) |
+| ~~`2026-09-06_promoter-system-plan_boots.md`~~ | — | alter Boots-Etappenplan (optional M4) | nicht abgelegt |

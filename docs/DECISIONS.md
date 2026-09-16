@@ -4,6 +4,20 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**16.09.2026 — Geschäftsregeln: Anzahlung, Provision, 10+1-Gruppenregel, Kontingent (von Marco festgelegt)**
+
+Entscheidung (verbindlich, Quelle: Marco, 16.09.2026 — ersetzt die offenen Fragen F1, F2, F3, F5 in `docs/RISKS.md`):
+
+1. **Anzahlung: 30 € pro Person/Ticket**, nicht pro Buchung. Beispiel: 3 Personen = 90 € Anzahlung, Rest wird im Bus kassiert. Konsequenz: Der Bestätigungsschritt im Verkaufs-Flow zeigt Anzahlung = Personen × 30 € und den offenen Rest ausgeschrieben; beide Beträge werden pro Buchung gespeichert (Hard Rule 7).
+2. **Provision: 10 € fest pro Ticket.** Der Betrag ist **im Promo-Dashboard durch Gabo änderbar** — nicht hart im Code, nicht in einer Migration als Konstante. **Interne Events dürfen davon abweichen** (eigener Provisionsbetrag pro Event). Konsequenz: Provisionsregel als Datensatz (Standard + Ausnahme pro Termin/Event), und pro Buchung wird der zum Verkaufszeitpunkt gültige Betrag als **Snapshot** gespeichert, damit spätere Änderungen im Dashboard die Historie nicht umschreiben (RISKS Nr. 21).
+3. **10+1-Gruppenregel: ab 11 Personen ist 1 Person gratis; Provision wird für 10 gezahlt.** Die Regel ist **durch Gabo pflegbar** (Schwelle und Anzahl Gratisplätze nicht hart codiert). Konsequenz: Der Gratisplatz belegt trotzdem Kontingent (11 Sitze werden reserviert), bezahlt und provisioniert werden 10. Offen: ob die Anzahlung für 10 oder 11 Personen fällig ist (F11).
+4. **Kontingent: Gabo trägt im Promo-Dashboard manuell pro Termin/Event ein Kontingent ein.** Promoter verkaufen **atomar** gegen dieses Kontingent (Reserve-Funktion, Hard Rule 4). **Keine Cross-DB-Kopplung** — dieses System erfährt nichts automatisch aus der Boots-DB; die Sperre der Plätze auf der Boots-Seite bleibt Gabos manueller Schritt dort (ADR-0001).
+5. **Storno-Provision: bewusst OFFEN.** Ob und wie Provision bei Stornierung entfällt/zurückgerechnet wird, ist nicht entschieden und wird **nicht erfunden** — offene Frage F10 in `docs/RISKS.md`. Bis zur Klärung kommt keine Storno-Provisionslogik in Code oder Migration.
+
+Begründung: Marcos Vorgaben vom 16.09.2026 nach Rücksprache mit Gabo. Die Regeln waren zuvor nur unbestätigt aus dem Boots-`TASKS.md` bekannt (RISKS Nr. 15). Nichts davon ist bisher in Code oder Schema — die Verankerung hier geht der Datenmodell-Etappe voraus.
+
+---
+
 **16.09.2026 — Lokale Ports 4532x statt der beauftragten 5532x**
 
 Entscheidung: Die lokale Supabase-Instanz läuft auf 45321 (API), 45322 (DB), 45323 (Studio), 45324 (Mail), 45327 (Analytics), Shadow-DB 45320, Pooler 45329, Edge-Inspector 8084. Dev-Server 3001. Boots bleibt auf 543xx / 3000.

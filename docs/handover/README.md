@@ -29,4 +29,4 @@ Trifft es 0 Zeilen → `SOLD_OUT`. Prüfung und Erhöhung bleiben **ein** Statem
 
 | Datei | Herkunft | Stand |
 |---|---|---|
-| `reserve-function-final.sql` | Boots-Repo, `docs/schema-snapshots/`, Commit `7d92565` (neu erzeugt nach `fdc8624`) | **noch nicht abgelegt** — Marco kopiert |
+| `reserve-function-final.sql` | Boots-Repo, `docs/schema-snapshots/`, Commit `7d92565` (neu erzeugt nach `fdc8624`) | **abgelegt 16.09.2026** — `cmp` gegen die Boots-Quelle: byteidentisch, 151 Zeilen. Enthält `reserve_departure_seats()` (11 Parameter, fester Kanal `online`/`full`) und `release_departure_seats()`; braucht Tabellen `tour_departures`, `bookings` und die Enums `booking_channel`, `payment_type`, `booking_status` (RISKS Nr. 23, F12) |

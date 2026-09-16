@@ -24,3 +24,20 @@ Warum: Marcos Auftrag vom 16.09.2026 — Fundament + Doku vor jedem Feature; Tre
 Agent: Claude (Session mit Marco).
 
 Commit: `8c434d6` (gezielt per Pfad; `supabase/.env.local` nicht enthalten, geprüft mit `git ls-files`). Zusätzlich verifiziert: `next dev -p 3001` meldet „Ready", Ausgabe `Local: http://localhost:3001`.
+
+---
+
+## 16.09.2026 — Übergabe-Dateien geprüft, Geschäftsregeln verankert, Etappenplan vorgeschlagen
+
+Was:
+- Marco hat `docs/handover/reserve-function-final.sql` und zwei Recherchen in `docs/research/` abgelegt. Geprüft: SQL byteidentisch mit `C:\Projects\MyMallorcaExperience\docs\schema-snapshots\reserve-function-final.sql` (`cmp`), 151 Zeilen; Recherchen 295 und 290 Zeilen, UTF-8, vollständige Enden. Index-Tabellen in beiden READMEs nachgetragen. RISKS Nr. 19 → 🟢.
+- `docs/DECISIONS.md`: neuer Eintrag „Geschäftsregeln" (Marco, 16.09.): Anzahlung 30 € pro Person; Provision 10 € fest pro Ticket, im Dashboard änderbar, interne Events abweichend; 10+1-Regel (ab 11 Personen 1 gratis, Provision für 10, Gabo-pflegbar); Kontingent manuell pro Termin/Event, atomarer Verkauf dagegen, keine Cross-DB-Kopplung; Storno-Provision bewusst offen.
+- `docs/RISKS.md`: F1/F2/F3/F5 auf geklärt, F4 weitgehend geklärt; neue Fragen F10 (Storno-Provision, offen gelassen), F11 (Anzahlung bei Gratisplatz), F12 (Funktions-Anpassung Option A/B); neue Risiken Nr. 21 (Provisions-Snapshot), Nr. 22 (10+1: Sitze vs. bezahlte Plätze), Nr. 23 (Handover-Funktion schreibt fest `online`/`full`); Nr. 15 → 🟡.
+- `TASKS.md`: M1–M3 abgehakt, M7 teilweise; Phase 1 als detaillierter Etappenplan E1–E8 (Vorschlag, nicht beschlossen), E1 = Sicherheitsnetz (Testrunner, Migration 0001 Schema, 0002 Funktion unverändert, 8-parallel-Test) als Gate. Design-Annahme „`capacity_total` = Kontingent" zur Bestätigung.
+- `PROGRESS.md` überschrieben (Stand: Plan wartet auf Marco).
+
+Nicht gemacht: kein Code, keine Migration, kein Test — Marcos Auftrag „Zeig mir den Plan, bau noch nichts".
+
+Warum: Marcos Nachricht vom 16.09.2026 (Regeln verbindlich verankern, Etappenplan vorschlagen).
+
+Agent: Claude (Session mit Marco).
