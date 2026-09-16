@@ -80,3 +80,15 @@ Verifikation: `supabase db reset` → „Applying migration 0001_inventory_core.
 Warum: TASKS E1.2 — Voraussetzung, damit die Funktion in 0002 unverändert einspielbar ist (Hard Rule 4). `capacity_total` = Kontingent laut `docs/DECISIONS.md` 16.09.
 
 Agent: Claude.
+
+---
+
+## 16.09.2026 — E1.3: Migration 0002 — Handover-Funktionen unverändert übernommen
+
+Was: `supabase/migrations/0002_reserve_function_handover.sql` = 7-zeiliger Kopf + `tail -n +49 docs/handover/reserve-function-final.sql` (beide Funktionsblöcke, Rechte-Zeilen, Rechte-Kommentar). Nicht abgetippt, per Shell kopiert. `tests/reserve-function-unchanged.test.ts`: vergleicht `pg_get_functiondef()` von `reserve_departure_seats` und `release_departure_seats` mit dem jeweiligen CREATE-Block der Handover-Datei (Zeilenenden normalisiert), prüft das atomare UPDATE und `SOLD_OUT` wörtlich, prüft `has_function_privilege` (anon/authenticated false, service_role true).
+
+Verifikation: `diff <(tail -n +49 docs/handover/reserve-function-final.sql) <(tail -n +8 supabase/migrations/0002_reserve_function_handover.sql)` → leer. `supabase db reset` → „Applying migration 0001 … 0002 … Finished". `npm test` → Test Files 2 passed, Tests 6 passed.
+
+Warum: TASKS E1.3, Hard Rule 4, RISKS Nr. 3 (Abweichung beim Übernehmen) — der Nachweis ist jetzt automatisiert und läuft bei jedem `npm test`.
+
+Agent: Claude.
