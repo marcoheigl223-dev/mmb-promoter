@@ -41,3 +41,30 @@ Nicht gemacht: kein Code, keine Migration, kein Test — Marcos Auftrag „Zeig 
 Warum: Marcos Nachricht vom 16.09.2026 (Regeln verbindlich verankern, Etappenplan vorschlagen).
 
 Agent: Claude (Session mit Marco).
+
+---
+
+## 16.09.2026 — E1.0: Kontingent-Entscheidung + Etappenplan bestätigt (Doku)
+
+Was: `docs/DECISIONS.md` neuer Eintrag „`capacity_total` IST das Kontingent; Etappenplan E1–E8 bestätigt" (Marco). `PROGRESS.md` auf Etappe-1-Stand gesetzt (Reihenfolge E1.0–E1.4, Wiedereinstieg per `git log`/`npm test`).
+
+Warum: Marcos Bestätigung vom 16.09.2026; Session-Kontext war voll, Stand musste vor der Arbeit gesichert sein.
+
+Agent: Claude.
+
+---
+
+## 16.09.2026 — E1.1: Testrunner (Vitest + postgres.js)
+
+Was:
+- `npm install -D vitest postgres @types/node@^22` — Vitest 5.0.1, postgres.js 3.4.9. `@types/node` von ^20 auf ^22 angehoben, weil Vitest 5 das als Peer verlangt (npm ERESOLVE); Node ist 24.12, `tsc --noEmit` weiterhin sauber.
+- `package.json`: Skripte `test` (`vitest run`) und `test:watch`.
+- `vitest.config.mts`: nur `tests/**/*.test.ts`, Test-Dateien **nacheinander** (`fileParallelism: false`, gemeinsame DB), Timeouts 20 s. `.mts`, weil Vite sonst vor ESM-in-CJS warnt.
+- `tests/db.ts`: `DATABASE_URL` aus Umgebung → `.env.local` → Default `127.0.0.1:45322`; wirft bei jeder nicht-lokalen URL (Tests legen Daten an). `connect(max)` — `max` muss ≥ Anzahl paralleler Aufrufe sein, sonst serialisiert der Pool und der Überbuchungstest beweist nichts.
+- `tests/smoke.test.ts`: DB erreichbar, `current_database() = postgres`, PostgreSQL 17, URL enthält `:45322/` (nicht die Boots-Instanz 54322, Hard Rule 10).
+
+Verifikation: `npm test` → „Test Files 1 passed, Tests 2 passed"; `npx tsc --noEmit` OK; `npx eslint tests vitest.config.mts` OK.
+
+Warum: TASKS E1.1 — Sicherheitsnetz vor jedem Feature (RISKS Nr. 8).
+
+Agent: Claude.
