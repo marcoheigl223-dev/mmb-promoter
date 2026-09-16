@@ -4,9 +4,16 @@
 
 ## Aktuelle Aufgabe
 
-**Etappenplan liegt Marco zur Bestätigung vor (16.09.2026, `TASKS.md` Phase 1).** Es wird **nichts gebaut**, bis Marco den Plan bestätigt. Geschäftsregeln (Anzahlung, Provision, 10+1, Kontingent) sind in `docs/DECISIONS.md` verankert; Storno-Provision bewusst offen (F10).
+**Etappe 1 (Sicherheitsnetz) läuft — 16.09.2026, Auftrag Marco: ein Strang, `git diff` vor jedem Commit, jeder Unterschritt einzeln, danach Stopp.** Plan bestätigt, `capacity_total` = Kontingent bestätigt (`docs/DECISIONS.md`).
 
-Zur Bestätigung durch Marco vor E1: die Design-Annahme „`capacity_total` = Kontingent" (TASKS Phase 1, Kopf). Vor E5: F11 (Anzahlung bei Gratisplatz), F12 (Option A/B Funktions-Anpassung).
+Reihenfolge und Stand (Details `TASKS.md` E1):
+- E1.0 Doku-Commit (diese Datei + DECISIONS) — [x]
+- E1.1 Vitest + postgres.js + `npm test` + Smoke-Test — [ ]
+- E1.2 Migration `0001_inventory_core.sql` (Enums, `tour_departures`, `bookings`) — [ ]
+- E1.3 Migration `0002_reserve_function_handover.sql` (Handover-Zeilen 49–151 verbatim) + Diff-Nachweis + Test „Funktion in DB = Handover-Datei" — [ ]
+- E1.4 Überbuchungstest 8-parallel + Freigabe-Test — [ ]
+
+Bei Neustart der Session: `git log --oneline -8` zeigt, welche Unterschritte committet sind; `npm test` zeigt den Teststand; `supabase db reset` spielt die Migrationen neu ein.
 
 ## Wiedereinstieg — Befehle und Pfade
 

@@ -4,6 +4,14 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**16.09.2026 — `capacity_total` IST das Kontingent; Etappenplan E1–E8 bestätigt**
+
+Entscheidung (Marco, 16.09.2026): In dieser Datenbank ist `tour_departures.capacity_total` das Kontingent, das Gabo pro Termin/Event manuell einträgt. Eine andere Kapazität (Bootskapazität, Online-Anteil) kennt dieses System nicht. Die Überbuchungssperre der Handover-Funktion (`seats_booked_total + p_seats <= capacity_total` im atomaren UPDATE) wirkt damit **unverändert** gegen das Kontingent — **keine Zusatzlogik, keine zusätzliche Spalte, keine zusätzliche WHERE-Bedingung** nötig. Der Etappenplan in `TASKS.md` Phase 1 (E1 Sicherheitsnetz als Gate, danach E2–E8) ist bestätigt. Die Risiken Nr. 21–23 und die Fragen F11/F12 werden vor Etappe 5 geklärt, für Etappe 1 sind sie nicht nötig.
+
+Begründung: Das vermeidet genau die Schema-Durchdringung (Quota-Spalten, Doppelzähler), an der das Modul im Boots-Projekt gescheitert ist, und hält Hard Rule 4 trivial ein: Die Funktion wird byteidentisch übernommen.
+
+---
+
 **16.09.2026 — Geschäftsregeln: Anzahlung, Provision, 10+1-Gruppenregel, Kontingent (von Marco festgelegt)**
 
 Entscheidung (verbindlich, Quelle: Marco, 16.09.2026 — ersetzt die offenen Fragen F1, F2, F3, F5 in `docs/RISKS.md`):
