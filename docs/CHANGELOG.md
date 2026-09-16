@@ -68,3 +68,15 @@ Verifikation: `npm test` → „Test Files 1 passed, Tests 2 passed"; `npx tsc -
 Warum: TASKS E1.1 — Sicherheitsnetz vor jedem Feature (RISKS Nr. 8).
 
 Agent: Claude.
+
+---
+
+## 16.09.2026 — E1.2: Migration 0001 — Kern-Inventar (Enums, tour_departures, bookings)
+
+Was: `supabase/migrations/0001_inventory_core.sql`. Enums `booking_channel` ('online', 'promoter' — der Promoter-Wert wird jetzt mit angelegt, damit später kein `ALTER TYPE … ADD VALUE` nötig ist), `payment_type` ('deposit','full'), `booking_status` ('pending','confirmed','cancelled','refunded'). `tour_departures`: `id`, `title`, `starts_at`, `capacity_total` (= **Kontingent**, `>= 0`), `seats_booked_total` (default 0), `status` open/closed/cancelled, `created_at`, Constraint `total_within_capacity`. `bookings`: exakt die Spalten, die die Handover-Funktion befüllt (Kanal, Zahlungstyp, Sitze, Beträge, Status, Stripe-Intent, Kunde, Shuttle, Allergie), FK auf `tour_departures`, Constraint Allergie-Details bei Flag. Grants für `service_role`. Spaltentypen spiegeln das Boots-Schema (dort 0001 + 0002 minus 0005), einzige bewusste Abweichung: `capacity_total >= 0` statt `> 0` (Termin anlegen, Kontingent später eintragen). Keine Profile, keine Provision, keine Regeln.
+
+Verifikation: `supabase db reset` → „Applying migration 0001_inventory_core.sql … Finished"; `psql`: Enums mit erwarteten Werten, `tour_departures` 7 Spalten, `bookings` 16 Spalten, `schema_migrations` = `0001 inventory_core`.
+
+Warum: TASKS E1.2 — Voraussetzung, damit die Funktion in 0002 unverändert einspielbar ist (Hard Rule 4). `capacity_total` = Kontingent laut `docs/DECISIONS.md` 16.09.
+
+Agent: Claude.
