@@ -1,49 +1,56 @@
 # PROGRESS.md — Scratchpad (Arbeitsstand der laufenden Aufgabe)
 
-**Angelegt 16.09.2026 (Fundament).** Einzige Datei, die überschrieben werden darf. Nichts hier gilt als protokolliert — erledigte Schritte gehören nach `docs/CHANGELOG.md` (Hard Rule 2).
+**Stand 16.09.2026, Etappe 1 (Sicherheitsnetz) ABGESCHLOSSEN.** Einzige Datei, die überschrieben werden darf. Nichts hier gilt als protokolliert — erledigte Schritte stehen in `docs/CHANGELOG.md` (Hard Rule 2).
 
-## Aktuelle Aufgabe
+## Wo wir stehen
 
-**Etappe 1 (Sicherheitsnetz) läuft — 16.09.2026, Auftrag Marco: ein Strang, `git diff` vor jedem Commit, jeder Unterschritt einzeln, danach Stopp.** Plan bestätigt, `capacity_total` = Kontingent bestätigt (`docs/DECISIONS.md`).
+Etappe 1 komplett, jeder Unterschritt einzeln committet, alle verifiziert:
 
-Reihenfolge und Stand (Details `TASKS.md` E1):
-- E1.0 Doku-Commit (diese Datei + DECISIONS) — [x]
-- E1.1 Vitest + postgres.js + `npm test` + Smoke-Test — [ ]
-- E1.2 Migration `0001_inventory_core.sql` (Enums, `tour_departures`, `bookings`) — [ ]
-- E1.3 Migration `0002_reserve_function_handover.sql` (Handover-Zeilen 49–151 verbatim) + Diff-Nachweis + Test „Funktion in DB = Handover-Datei" — [ ]
-- E1.4 Überbuchungstest 8-parallel + Freigabe-Test — [ ]
+| Schritt | Commit | Beleg |
+|---|---|---|
+| E1.0 Doku (Regeln, Plan, Kontingent-Entscheidung) | `fc50fdf` | DECISIONS/RISKS/TASKS |
+| E1.1 Vitest + postgres.js + `npm test` | `e6f6801` | Smoke-Test 2/2 |
+| E1.2 Migration `0001_inventory_core.sql` | `8d75b7c` | `supabase db reset`, Enums + 2 Tabellen |
+| E1.3 Migration `0002_reserve_function_handover.sql` | `385fcc0` | Diff gegen Handover leer; `pg_get_functiondef` == Datei |
+| E1.4 Überbuchungstest | `b416e5d` | **13/13 grün**, 8 parallel → 1 Erfolg / 7× SOLD_OUT |
 
-Bei Neustart der Session: `git log --oneline -8` zeigt, welche Unterschritte committet sind; `npm test` zeigt den Teststand; `supabase db reset` spielt die Migrationen neu ein.
+**Marco hat „Danach Stopp" gesagt.** Etappe 2 (Login + Rollen) ist NICHT begonnen. Nächster Schritt: Marco gibt E2 frei (TASKS E2.1–E2.3). Vor E5: F10, F11, F12 und RISKS Nr. 21–23 klären.
 
-## Wiedereinstieg — Befehle und Pfade
+## Wiedereinstieg — Befehle
 
 ```
 supabase start          # lokale Instanz (Ports 4532x), braucht supabase/.env.local
-supabase status         # URLs + Keys → in .env.local eintragen (Vorlage: .env.local.example)
-npm run dev             # Next.js auf http://127.0.0.1:3001
-supabase stop           # Instanz stoppen (DB bleibt erhalten)
+supabase db reset       # spielt 0001 + 0002 neu ein (löscht lokale Daten — nur Testdaten)
+npm test                # Vitest: 3 Dateien, 13 Tests, ~1 s; braucht laufende Instanz
+npx vitest run --reporter=verbose
+npx tsc --noEmit && npx eslint tests
+git log --oneline       # Stand: b416e5d (E1.4)
+npm run dev             # Next.js auf http://127.0.0.1:3001 (Gerüst, keine Features)
 ```
 
 | Was | Wert |
 |---|---|
-| Supabase API | http://127.0.0.1:45321 |
-| Postgres | postgresql://postgres:postgres@127.0.0.1:45322/postgres |
-| Studio | http://127.0.0.1:45323 |
-| Mailpit | http://127.0.0.1:45324 |
-| Dev-Server | http://127.0.0.1:3001 |
+| Postgres | postgresql://postgres:postgres@127.0.0.1:45322/postgres (Default in `tests/db.ts`) |
+| Supabase API / Studio / Mailpit | 45321 / 45323 / 45324 |
 | Container-Präfix | `supabase_*_mmb-promoter` |
 | JWT-Secret | `supabase/.env.local` (gitignored) |
 
-Stand 16.09.2026: Instanz läuft, `JWT_SECRET` = eigener Wert; `next dev -p 3001` „Ready". CLI meldet Update v2.117.0 (installiert 2.108.0) — nicht gemacht, kein Auftrag.
+## Was existiert
 
-## Was existiert / was nicht
+- `supabase/migrations/0001_inventory_core.sql` — Enums `booking_channel`, `payment_type`, `booking_status`; Tabellen `tour_departures` (`capacity_total` = Kontingent), `bookings`.
+- `supabase/migrations/0002_reserve_function_handover.sql` — Handover-Zeilen 49–151 byteidentisch (nie editieren; Erweiterung = neue Migration, E5.1).
+- `tests/db.ts` (Verbindung, nur localhost), `tests/smoke.test.ts`, `tests/reserve-function-unchanged.test.ts`, `tests/overbooking.test.ts`.
+- `vitest.config.mts` — `fileParallelism: false`, damit Testdateien sich nicht gegenseitig in der DB stören.
 
-- `docs/handover/reserve-function-final.sql` liegt vor (byteidentisch zur Boots-Quelle). Braucht `tour_departures`, `bookings`, Enums `booking_channel`/`payment_type`/`booking_status`; schreibt fest `online`/`full` (RISKS Nr. 23).
-- `docs/research/` enthält beide Recherchen (Index im README).
-- **Keine** Migration, **kein** Testrunner, **kein** `.env.local` im Root (M5 offen), `src/app/*` unverändertes Gerüst.
+## Was noch NICHT existiert
+
+- Kein Login, keine Rollen, keine Profile (E2). `src/app/*` ist das unveränderte Create-Next-App-Gerüst.
+- Keine Promoter-Spalten in `bookings`, keine Provisions-/Gruppenregeln (E3/E5).
+- Kein `.env.local` im Root (M5), kein GitHub-Remote (M6).
 
 ## Warnungen für den Wiedereinstieg
 
-- Ports sind **4532x**, nicht 5532x — Windows-Portreservierung, `docs/DECISIONS.md` 16.09.
-- `next dev` schreibt den Next.js-Block oben in `AGENTS.md` neu; Projektregeln darunter bleiben. Diff danach nicht wundern.
-- Storno-Provision (F10) **nicht erfinden** — Marco hat sie ausdrücklich offen gelassen.
+- Tests laufen gegen die **lokale** DB und legen/löschen Zeilen `TEST-overbooking-%` — nie gegen eine andere URL (`tests/db.ts` verweigert Nicht-localhost).
+- `next dev` schreibt den Next.js-Block oben in `AGENTS.md` neu — Diff danach nicht wundern.
+- Ports 4532x, nicht 5532x (DECISIONS 16.09.).
+- `@types/node` ist ^22 (Vitest-Peer-Dep), nicht ^20 — nicht zurückdrehen.

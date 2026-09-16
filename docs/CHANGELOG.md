@@ -119,3 +119,13 @@ Test Files  3 passed (3)
 Warum: TASKS E1.4, Hard Rule 4 — Beweis, dass die übernommene Sperre auch in dieser DB gegen das manuell eingetragene Kontingent (`capacity_total`) wirkt. RISKS Nr. 2 → 🟢, Nr. 3 → 🟢, Nr. 8 → 🟡 (Runner + 13 Tests, Auth-Tests folgen in E2).
 
 Agent: Claude.
+
+---
+
+## 16.09.2026 — Etappe 1 abgeschlossen: PROGRESS.md auf Endstand
+
+Was: `PROGRESS.md` überschrieben (einzige Datei, für die das erlaubt ist) mit Commit-Tabelle E1.0–E1.4, Wiedereinstiegs-Befehlen, „Was existiert / Was nicht", Warnungen. Ausdrücklicher Hinweis: Etappe 2 nicht begonnen („Danach Stopp", Marco).
+
+Warum: Marcos Auftrag („Session ist voll — leg vorher/nachher den Stand in PROGRESS.md ab"), RISKS Nr. 20.
+
+Agent: Claude.
