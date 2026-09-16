@@ -92,3 +92,30 @@ Verifikation: `diff <(tail -n +49 docs/handover/reserve-function-final.sql) <(ta
 Warum: TASKS E1.3, Hard Rule 4, RISKS Nr. 3 (Abweichung beim Übernehmen) — der Nachweis ist jetzt automatisiert und läuft bei jedem `npm test`.
 
 Agent: Claude.
+
+---
+
+## 16.09.2026 — E1.4: Überbuchungstest grün — das „niemals überbuchen"-Fundament steht
+
+Was: `tests/overbooking.test.ts` (7 Tests). Kern: Termin mit `capacity_total = 1`, 8 gleichzeitige Aufrufe von `reserve_departure_seats()` über 8 eigene, vorab geöffnete Verbindungen (`connect(8)` + `Promise.allSettled`) → genau 1 Erfolg, 7× `SOLD_OUT`, `seats_booked_total = 1`, genau 1 Buchungszeile. Dazu: Kontingent 5 bei 8 parallelen → genau 5; 2 Sitze auf Kontingent 1 → `SOLD_OUT`; Kontingent 0 → `SOLD_OUT`; Status `closed` → `SOLD_OUT`; Freigabe → Zähler 0, zweite Freigabe idempotent, danach 8-parallel wieder genau 1 Erfolg; unbekannte Buchung → `BOOKING_NOT_FOUND`. Testzeilen werden in `afterAll` gelöscht (Prüfung: 0 Zeilen `TEST-overbooking-%` übrig).
+
+Verifikation (wörtlich, `npx vitest run --reporter=verbose`):
+
+```
+✓ tests/overbooking.test.ts > … > Kontingent 1, 8 parallele Reservierungen → genau 1 Erfolg, 7× SOLD_OUT 39ms
+✓ tests/overbooking.test.ts > … > Kontingent 5, 8 parallele Reservierungen → genau 5 Erfolge, Zähler exakt 5 42ms
+✓ tests/overbooking.test.ts > … > mehr Sitze als Kontingent in einem Aufruf → SOLD_OUT, Zähler unverändert 10ms
+✓ tests/overbooking.test.ts > … > Kontingent 0 → SOLD_OUT (kein Verkauf ohne von Gabo eingetragenes Kontingent) 10ms
+✓ tests/overbooking.test.ts > … > geschlossener Termin → SOLD_OUT, auch wenn Kontingent frei ist 16ms
+✓ tests/overbooking.test.ts > … > Freigabe gibt den Platz zurück, ist idempotent, und der Platz ist wieder buchbar 44ms
+✓ tests/overbooking.test.ts > … > unbekannte Buchung bei Freigabe → BOOKING_NOT_FOUND 4ms
+✓ tests/reserve-function-unchanged.test.ts (4)   ✓ tests/smoke.test.ts (2)
+Test Files  3 passed (3)
+     Tests  13 passed (13)
+```
+
+`npx tsc --noEmit` OK, `npx eslint tests` OK.
+
+Warum: TASKS E1.4, Hard Rule 4 — Beweis, dass die übernommene Sperre auch in dieser DB gegen das manuell eingetragene Kontingent (`capacity_total`) wirkt. RISKS Nr. 2 → 🟢, Nr. 3 → 🟢, Nr. 8 → 🟡 (Runner + 13 Tests, Auth-Tests folgen in E2).
+
+Agent: Claude.
