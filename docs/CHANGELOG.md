@@ -129,3 +129,15 @@ Was: `PROGRESS.md` überschrieben (einzige Datei, für die das erlaubt ist) mit 
 Warum: Marcos Auftrag („Session ist voll — leg vorher/nachher den Stand in PROGRESS.md ab"), RISKS Nr. 20.
 
 Agent: Claude.
+
+---
+
+## 17.09.2026 — Voll-Diagnose als Grundlage für den Masterplan (nur Doku)
+
+Was: `docs/DIAGNOSE_MASTERPLAN_BASIS.md` neu — Momentaufnahme des Projekts: IST-Stand mit Reifegrad (Fundament ~95 %, Features 0 %, gesamt ~20 % bis zum ersten Verkauf), geklärte Regeln vs. offene Fragen mit Gate-Zuordnung (F4 vor E3; F8/F11/F12 vor E5; F6/F10 vor E7; F7 vor E8), Etappenplan E1–E8 mit Status (E1 fertig, E2 wartet auf Freigabe), Abhängigkeiten der Handover-Funktion (alle erfüllt), priorisierte Liste bis zum ersten lauffähigen Promoter-Verkauf, neun Befunde (B1–B9: u. a. Passwort-Mindestlänge 6 statt 12 in `config.toml`, Identitätstest bricht bei F12 Option A absichtlich, kein GitHub-Remote, RLS-Policies gehören in E2.1). Live-Zustand am 17.09. erneut geprüft: `npm test` 13/13 grün, `tsc` sauber, Migrationsstand 0001+0002, 0 Nutzer, RLS aus.
+
+Nicht gemacht: kein Code, keine Migration, keine Config-Änderung, keine Änderung an RISKS/TASKS — Befunde werden erst nach Marcos Sichtung dort übernommen.
+
+Warum: Marcos Auftrag vom 17.09.2026 („Voll-Diagnose als Grundlage für einen großen Masterplan — nur lesen/analysieren, nichts bauen").
+
+Agent: Claude.
