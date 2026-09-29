@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireArea } from "@/lib/auth/dal";
 import { logout } from "@/app/login/actions";
 
@@ -19,11 +21,19 @@ export default async function AdminLayout({
           </p>
           <p className="font-medium">{profile.display_name}</p>
         </div>
-        <form action={logout}>
-          <button type="submit" className="text-sm underline">
-            Abmelden
-          </button>
-        </form>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/admin" className="underline">
+            Termine
+          </Link>
+          <Link href="/admin/regeln" className="underline">
+            Regeln
+          </Link>
+          <form action={logout}>
+            <button type="submit" className="underline">
+              Abmelden
+            </button>
+          </form>
+        </nav>
       </header>
       {children}
     </div>
