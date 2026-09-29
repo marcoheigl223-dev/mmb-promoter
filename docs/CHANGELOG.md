@@ -211,3 +211,63 @@ Was: `TASKS.md` M5, M6, E2.1–E2.3 abgehakt mit Belegen. `docs/RISKS.md`: Nr. 7
 Warum: Hard Rule 2, Sitzungsende-Regel in AGENTS.md.
 
 Agent: Claude.
+
+---
+
+## 29.09.2026 — E3.1: Migration 0004 — Termine/Events (intern-Flag, Notiz), Provisions- und Gruppenregeln als Daten, Schreib-Policies nur für network_operator, Privilegien-Härtung
+
+Was: `supabase/migrations/0004_events_and_rules.sql` (additiv, per `docker exec … psql` eingespielt, Historie-Zeile `0004 events_and_rules` von Hand nachgetragen — CLI weiter blockiert, RISKS Nr. 24):
+- `tour_departures` + `is_internal boolean not null default false` (internes Event: nur im Promoter-Netzwerk, nie öffentlich) + `note text`.
+- `commission_rules` (`departure_id` NULL = Standard, sonst Ausnahme für diesen Termin; `commission_cents` ≥ 0, NULL nur bei Ausnahme = „wieder Standard"; `valid_from`; `created_by default auth.uid()`), Index `(departure_id, valid_from desc)`. `group_rules` (`threshold_persons` ≥ 2, `free_persons` ≥ 0, Check `free < threshold`, `valid_from`, `created_by`).
+- **Startwerte als Daten:** Standard 1000 Cent und Gruppenregel 11/1, jeweils gültig ab 16.09.2026 (Marcos Werte aus DECISIONS 16.09.) — keine Konstante im Code.
+- Funktionen `effective_commission_cents(p_departure_id, p_at default now())` (Ausnahme vor Standard, neuestes `valid_from <= p_at`) und `effective_group_rule(p_at)`; ausführbar für `authenticated`/`service_role`.
+- RLS an auf beiden Regel-Tabellen: SELECT für aktive Profile, INSERT nur `is_network_operator() and created_by = auth.uid()`; **kein UPDATE/DELETE-Grant** (append-only). `tour_departures`: Spalten-Grants INSERT/UPDATE nur auf `title, starts_at, capacity_total, status, is_internal, note` + Policies `is_network_operator()`; `seats_booked_total` bleibt unschreibbar, kein DELETE.
+- **Härtung (Befund):** Supabase-Default-Privilegien gaben `anon`/`authenticated` TRUNCATE/REFERENCES/TRIGGER/MAINTAIN auf allen Tabellen in `public` — auch auf `bookings`/`profiles`/`tour_departures` aus E1/E2. Widerrufen (`revoke … from anon/authenticated`, `alter default privileges … revoke` für Tabellen und Funktionen), `effective_*` für `public`/`anon` entzogen. Nachträglich an 0004 angehängt, bevor die Datei committet war — keine angewendete Migration editiert (Hard Rule 1). → RISKS Nr. 25.
+
+Verifikation: `information_schema.table_privileges`/`column_privileges`: `authenticated` = commission_rules INSERT,SELECT · group_rules INSERT,SELECT · profiles SELECT · tour_departures SELECT + Spalten-INSERT/UPDATE auf den 6 Pflege-Spalten; `anon` nichts; `effective_commission_cents(gen_random_uuid())` = 1000, `effective_group_rule()` = 11/1. `tests/events-rules-rls.test.ts` 21/21 (Details unter E3.3). `tests/reserve-function-unchanged.test.ts` und `tests/overbooking.test.ts` weiter grün — Reserve-Funktion unverändert (Hard Rule 4).
+
+Warum: TASKS E3.1; Marcos Auftrag 29.09. („Provisions-Standard (10€/Ticket) + Event-Ausnahme, 10+1-Gruppenregel-Parameter — alles als DATEN in der DB", „interne Events … als Flag", „RLS-Policies … deny-by-default, nur network_operator schreibt"). DECISIONS 29.09. (Etappe 3). F4-Detail: als Annahme umgesetzt und in RISKS F4 zur Bestätigung vermerkt, Restfrage F14.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E3.2: Admin-UI für Gabo — Termine/Events anlegen und pflegen, Kontingent, Provisions-Ausnahme, Standard-Provision und 10+1 auf /admin/regeln
+
+Was:
+- `src/lib/admin/` neu: `time.ts` (Ortszeit Mallorca `Europe/Madrid` ⇄ UTC für `datetime-local`, Anzeige de-DE), `money.ts` (Euro-Eingabe „12,50" ⇄ ganze Cent), `types.ts`, `errors.ts` (DB-Fehler → deutsche Meldungen: `total_within_capacity` → „Kontingent kann nicht unter die bereits gebuchten Plätze gesenkt werden.", 42501 → „Keine Berechtigung"), `queries.ts` (`server-only`; Termine kommend/vergangen, Regel-Historien, `rpc(effective_*)`).
+- `src/app/admin/termine/actions.ts` (Server Actions `createDeparture`, `updateDeparture`, `setDepartureCommission`), `departure-form.tsx`, `neu/page.tsx`, `[id]/page.tsx` (+ `commission-override-form.tsx`: Ausnahme in Euro oder „wieder Standard", optional Gültig-ab, Historie). `src/app/admin/regeln/` (`actions.ts` `setStandardCommission`/`setGroupRule`, `rules-forms.tsx`, `page.tsx`: aktueller Wert + Historie je Regel). Jede Action ruft selbst `requireArea("admin")` und schreibt über den RLS-Client des Nutzers (`createClient()` aus `@supabase/ssr`, nie `service_role`) — die Policies aus 0004 sind die zweite Schranke.
+- `src/app/admin/layout.tsx` additiv: Navigation „Termine" / „Regeln". **`src/app/admin/page.tsx` ersetzt** (E2-Platzhalter „Test-Operator (Gabo)" → Terminliste kommend/vergangen mit Kontingent/gebucht/frei, „intern"-Badge, Button „Neuer Termin"). Begründung: der Platzhalter hatte keinen Inhalt außer der Begrüßung; der Name des Operators steht weiterhin im Layout, der E2-Test `tests/app-access.test.ts` („Test-Operator") bleibt grün.
+- Nicht gebaut (bewusst): kein Löschen von Terminen (Absage = Status), keine Gruppenregel pro Event (nicht beauftragt), keine Verkaufsfunktion (E5).
+
+Verifikation: `npx next typegen` + `npx tsc --noEmit` 0, `npx eslint src tests` 0 (Lint-Regel `react-hooks/purity` hatte `Date.now()` im Render bemängelt → „jetzt"-Logik in `queries.ts` verschoben). Dev-Server 3001: ohne Session `/admin/regeln`, `/admin/termine/neu` → 307 `/login`. `tests/app-access.test.ts` 9/9 (Operator: `/admin` 200 „Termine und Events", `/admin/termine/neu` 200, `/admin/regeln` 200, `/admin/termine/keine-uuid` 404; Promoter: alle drei → 307 `/kein-zugang`). **Round-Trip durch die echten Server Actions** (Skript gegen den Dev-Server, Form-POST ohne JavaScript mit den `$ACTION_ID`-Feldern der gerenderten Seite, Session-Cookie des Seed-Operators): anlegen „TEST-e2e Sunset Cruise (intern)" 20.10.2026 18:30, Kontingent 12 → 303 `/admin/termine/<id>`; Detailseite zeigt „intern", Kontingent 12, 20.10.2026 18:30; ändern auf Kontingent 15 + geschlossen → „Gespeichert."; Ausnahme 12,50 € → „Ausnahme gespeichert", „Standard wäre 10,00 €"; derselbe POST als Promoter → 303 `/kein-zugang`; `/admin/regeln`: Gruppenregel 12/2 → „ab 12 Personen 2 gratis", Standard 11,00 € angezeigt. Per psql bestätigt: `starts_at = 2026-10-20 16:30+00` (= 18:30 Madrid), `capacity_total 15`, `closed`, `commission_rules` 1250 (Ausnahme) und 1100 (Standard) mit `created_by` = Operator, `group_rules` 12/2, `effective_commission_cents` 1250/1100, `effective_group_rule` 12/2. Testzeilen danach gelöscht, Stand wieder 1000 / 11+1. Browser-Test durch Marco steht aus (PROGRESS.md).
+
+Warum: TASKS E3.2; Marcos Auftrag 29.09. („Termine/Events anlegen, Kontingent pro Termin setzen (capacity_total = das Kontingent)", „Gabo-pflegbar"). Guides gelesen: server-actions, forms, data-security, revalidatePath, redirect. DECISIONS 29.09. (Etappe 3), Punkte 6–8.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E3.3: Tests — Kontingent nicht unter Gebuchtes, Regeln append-only, RLS der neuen Tabellen, Zeit-/Geld-Helfer, E2E
+
+Was:
+- `tests/events-rules-rls.test.ts` (21, neu): RLS an; Startwerte 10,00 €/11+1 ab 16.09.2026 als Daten; `authenticated` exakt SELECT/INSERT auf Regeln und Spalten-INSERT/UPDATE auf den 6 Pflege-Spalten, `anon` kein Tabellenrecht; Operator legt internes Event an, ändert Kontingent/Status/Flag, darf `seats_booked_total` weder setzen noch beim Anlegen mitgeben (`permission denied`), darf nicht löschen; **Kontingent 4 bei 5 gebuchten → `total_within_capacity`, 5 → OK**; Promoter: INSERT → RLS-Verletzung, UPDATE → 0 Zeilen, Wert unverändert; inaktiv sieht keine Regeln; Ausnahme 1500 schlägt Standard, andere Termine unberührt, `created_by` nicht fälschbar; NULL-Ausnahme = wieder Standard, alte Zeile bleibt (2 Zeilen); Standard ohne Betrag verboten; **neuer Standard = neue Zeile, alte 1000-Zeile bleibt, UPDATE/DELETE → `permission denied`**; Gültig-ab entscheidet (Zeile ab 2000 gewinnt jetzt nicht, `p_at = 2010` liefert sie, 1990 → NULL); Gruppenregel: neue Zeile gilt sofort, alte bleibt, UPDATE/DELETE verboten, Gratis ≥ Schwelle verboten. Aufräumen im `afterAll` (nur `TEST-e3-%` und die eigenen Testwerte).
+- `tests/admin-helpers.test.ts` (12, neu): Sommer-/Winterzeit, beide Umstellungstage 2026, 31.02. → null, Rückweg, Anzeige; „10", „10,5", „10.50", „ 12,00 € ", „0" → Cent; „abc", „10,555", „-5", „1e3", „10," → null.
+- `tests/app-access.test.ts` +2 (Operator sieht die drei Admin-Seiten, 404 bei kaputter ID; Promoter → `/kein-zugang`).
+- **`tests/profiles-rls.test.ts` geändert:** der E2-Test „authenticated darf keine Termine schreiben (kein Grant)" widerspricht 0004 (der Operator darf jetzt die Pflege-Spalten schreiben). Ersetzt durch „Promoter darf keine Termine schreiben (RLS: 0 Zeilen), seats_booked_total für niemanden" — die Schutzaussage bleibt erhalten, die Zeile wurde nicht gelöscht, sondern mit Kommentar auf den E3-Stand gebracht.
+
+Verifikation (wörtlich): `Test Files 9 passed (9) · Tests 88 passed (88)` — 53 aus E1/E2 + 35 neu (21 + 12 + 2); E1-Überbuchungstest (8 parallel → 1/7) und `pg_get_functiondef == Handover` unverändert grün. `tsc` 0, `eslint` 0. Zwei Korrekturen beim ersten Lauf: ein Testtitel mit deutschem Anführungszeichen brach den String (Titel umformuliert); `valid_from::date` lief in der UTC-Session auf den 15.09. → Vergleich jetzt `at time zone 'Europe/Madrid'`.
+
+Warum: TASKS E3.3 („Kontingent kann nicht unter seats_booked_total gesenkt werden; Regeländerung erzeugt neue Gültigkeit, überschreibt keine alte"), Hard Rule 8. RISKS Nr. 8, 21, 22, 25.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — Doku-Stand Etappe 3
+
+Was: `TASKS.md` E3.1–E3.3 abgehakt mit Belegen. `docs/DECISIONS.md`: Eintrag 29.09. „Etappe 3" (Regeln als append-only-Daten, NULL-Ausnahme = wieder Standard, Gruppenregel nur global, internes Event = Flag, Kontingent ohne Trigger, kein DELETE, Spalten-Grants, RLS-Client statt service_role, Ortszeit Mallorca, Privilegien-Härtung, ersetzter Admin-Platzhalter). `docs/RISKS.md`: Nr. 8 (88 Tests), Nr. 21 → 🟡, Nr. 22 ergänzt (bleibt 🔴 bis E5), Nr. 24 ergänzt, **neu Nr. 25** (Default-Privilegien, 🟢), F4 mit der E3-Annahme — **von Marco am 29.09.2026 bestätigt:** interne Events bekommen vorerst nur eine eigene Provision, kein eigener Preis/keine eigene Anzahlung; **neu F14** (Preis/Anzahlung interner Events, bewusst offen, vor E5). `PROGRESS.md` überschrieben (Stand E3, Commit-Vorschlag, Test-Anleitung für Gabos Admin-Bereich, Wiedereinstieg).
+
+Warum: Hard Rule 2, Sitzungsende-Regel in AGENTS.md.
+
+Agent: Claude.

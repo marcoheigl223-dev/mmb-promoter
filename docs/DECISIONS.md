@@ -4,6 +4,25 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**29.09.2026 — Etappe 3: Termine/Events, Kontingent und Regeln als Daten (append-only), internes Event = Flag, nur network_operator schreibt**
+
+Entscheidung (Marco, Auftrag 29.09.2026; Ausgestaltung Claude, Migration `0004_events_and_rules.sql`):
+
+1. **Provisions-Standard und 10+1-Parameter sind Datensätze, keine Konstanten.** `commission_rules` (Standard-Zeile mit `departure_id NULL`; Ausnahme pro Termin/Event) und `group_rules` (Schwelle, Gratisplätze) tragen `valid_from`. Die Startwerte aus DECISIONS 16.09. (10,00 €/Ticket, ab 11 Personen 1 gratis) stehen als **Daten in der Migration**, gültig ab 16.09.2026.
+2. **Regeln sind append-only — auch in der DB erzwungen.** `authenticated` hat auf beiden Regel-Tabellen nur SELECT und INSERT, kein UPDATE/DELETE. Jede Änderung durch Gabo ist eine neue Zeile mit neuem Gültig-ab; die Historie bleibt vollständig (Grundlage für die Snapshots in E5, RISKS Nr. 21). `effective_commission_cents(termin, zeitpunkt)` und `effective_group_rule(zeitpunkt)` liefern die zu einem Zeitpunkt gültige Regel (neuestes `valid_from <= zeitpunkt`, bei Gleichstand die zuletzt angelegte).
+3. **Ausnahme pro Termin/Event:** Eine `commission_rules`-Zeile mit `departure_id` schlägt den Standard. Eine Ausnahme-Zeile mit `commission_cents NULL` bedeutet „ab hier wieder Standard" — so lässt sich eine Ausnahme beenden, ohne etwas zu löschen. Standard-Zeilen ohne Betrag sind per Check verboten.
+4. **Gruppenregel nur global**, keine Ausnahme pro Event — Marco hat nur „10+1-Parameter pflegbar" beauftragt; eine Event-Ausnahme wäre eine erfundene Regel (Hard Rule 5).
+5. **Internes Event = Flag `tour_departures.is_internal`** (Marco: „interne Events (nur intern, nie öffentlich) als Flag"). Bedeutung: Verkauf nur im Promoter-Netzwerk, nie auf einem öffentlichen Kanal; eigene Provisions-Ausnahme möglich. Preis/Anzahlung interner Events sind nicht entschieden (F14). Dazu `note` (Freitext für Gabo). **Bestätigt von Marco am 29.09.2026:** Interne Events bekommen vorerst **nur eine eigene Provision**, keinen eigenen Preis und keine eigene Anzahlung; eigener Preis + Anzahlung bleiben als F14 offen.
+6. **`capacity_total` bleibt das Kontingent** (DECISIONS 16.09.), Gabo setzt es direkt. Die Absenkung unter `seats_booked_total` scheitert am bestehenden Check `total_within_capacity` aus 0001 — kein Trigger, keine neue Logik. Termine werden **nicht gelöscht** (kein DELETE-Grant), Absage = `status = 'cancelled'`.
+7. **Nur der network_operator schreibt, und nur die Pflege-Spalten:** Spalten-Grants INSERT/UPDATE auf `title, starts_at, capacity_total, status, is_internal, note`; `seats_booked_total` ist für `authenticated` unschreibbar — der Zähler gehört allein der Reserve-Funktion (Hard Rule 4, Funktion unverändert, E1-Tests weiter grün). Policies prüfen `is_network_operator()`; Regel-Zeilen zusätzlich `created_by = auth.uid()`.
+8. **App schreibt über den RLS-Client des Nutzers, nie über `service_role`.** Jede Server Action prüft selbst `requireArea("admin")` (Next.js-16-Guide: der Layout-Guard deckt Actions nicht). Zeiten werden in **Ortszeit Mallorca (Europe/Madrid)** eingegeben/angezeigt und als `timestamptz` (UTC) gespeichert; Beträge als ganze Cent.
+9. **Supabase-Default-Privilegien gehärtet:** `anon` verliert alle Tabellenrechte in `public`, `authenticated` TRUNCATE/REFERENCES/TRIGGER/MAINTAIN, jeweils auch als Default für künftige Tabellen/Funktionen (RISKS Nr. 25). Additiv in 0004, weil die Migration noch nicht committet war; Befund betrifft auch die Tabellen aus E1/E2.
+10. Der E2-Platzhalter `src/app/admin/page.tsx` („Test-Operator (Gabo)"-Begrüßung) wurde durch die Terminliste ersetzt — die einzige nicht-additive Code-Änderung, im CHANGELOG begründet.
+
+Begründung: Marcos Auftrag E3 („alles als DATEN in der DB, nicht als Konstante im Code (Gabo-pflegbar)", „RLS-Policies … deny-by-default, nur network_operator schreibt", „capacity_total = das Kontingent"), DECISIONS 16.09. (Geschäftsregeln 2–4), RISKS Nr. 21/22, Hard Rules 1, 4, 5.
+
+---
+
 **29.09.2026 — Etappe 2: Rollenname `network_operator`, Rolle nur aus der DB, deny-by-default, keine Selbstregistrierung**
 
 Entscheidung (Marco, Auftrag 29.09.2026; Ausgestaltung Claude):
