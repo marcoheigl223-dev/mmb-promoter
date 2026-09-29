@@ -1,12 +1,12 @@
 # PROGRESS.md — Scratchpad (Arbeitsstand der laufenden Aufgabe)
 
-**Stand 29.09.2026, Etappe 3 (Gabos Admin-Bereich: Termine/Events, Kontingent, Regeln) GEBAUT UND VERIFIZIERT, Commit wartet auf Marcos Freigabe.** Einzige Datei, die überschrieben werden darf. Nichts hier gilt als protokolliert — erledigte Schritte stehen in `docs/CHANGELOG.md` (Hard Rule 2).
+**Stand 29.09.2026, Etappe 3 (Gabos Admin-Bereich: Termine/Events, Kontingent, Regeln) GEBAUT, VERIFIZIERT UND COMMITTET (4 Commits, von Marco freigegeben), zusammen mit E2 gepusht.** Einzige Datei, die überschrieben werden darf. Nichts hier gilt als protokolliert — erledigte Schritte stehen in `docs/CHANGELOG.md` (Hard Rule 2).
 
 ## Wo wir stehen
 
 - Etappe 1 komplett (`fc50fdf` … `cda94b6`), auf GitHub (`origin/main` = `cda94b6`).
-- Etappe 2 komplett, 5 Commits `d265ae3`, `4bdc1ef`, `8f6ec6d`, `7e785f9`, `30dc6f8` — **lokal, noch nicht gepusht** (`git push` steht aus).
-- Etappe 3 ist **uncommittet** im Arbeitsbaum (Marco: „Committe erst nach meiner Bestätigung"). Vorgeschlagene Commit-Aufteilung, je gezielt per Pfad:
+- Etappe 2 komplett, 5 Commits `d265ae3`, `4bdc1ef`, `8f6ec6d`, `7e785f9`, `30dc6f8`.
+- Etappe 3 komplett, Commits (Marco-Freigabe 29.09.2026): E3.1 `ca25596`, E3.2 `3df108b`, E3.3 `d23843a`, Doku `125e41d` (+ dieser PROGRESS-Nachtrag). E2 + E3 mit `git push origin main` gesichert. Aufteilung war:
 
 | Schritt | Pfade | Beleg |
 |---|---|---|
@@ -15,7 +15,7 @@
 | E3.3 Tests | `tests/events-rules-rls.test.ts`, `tests/admin-helpers.test.ts`, `tests/app-access.test.ts`, `tests/profiles-rls.test.ts` | `npm test` 88/88 |
 | Doku | `TASKS.md`, `docs/RISKS.md`, `docs/DECISIONS.md`, `docs/CHANGELOG.md`, `PROGRESS.md` | — |
 
-**Offen für Marco:** (1) F4-Annahme bestätigen (internes Event = Flag `is_internal`, nur im Promoter-Netzwerk verkauft, eigene Provisions-Ausnahme möglich — RISKS F4), (2) F14 vor E5 (Preis/Anzahlung bei internen Events), (3) Befund RISKS Nr. 25 zur Kenntnis (Default-Privilegien, in 0004 gehärtet). Danach E4 (Promoter-Accounts). Vor E5: F10, F11, F12, F14, RISKS Nr. 22/23.
+**F4 bestätigt (Marco, 29.09.2026):** interne Events bekommen vorerst nur eine eigene Provision, kein eigener Preis/keine eigene Anzahlung (F14 bleibt offen). **Offen für Marco:** (1) Browser-Test des Admin-Bereichs (unten), (2) F14 vor E5 (Preis/Anzahlung bei internen Events), (3) Befund RISKS Nr. 25 zur Kenntnis (Default-Privilegien, in 0004 gehärtet). Danach E4 (Promoter-Accounts). Vor E5: F10, F11, F12, F14, RISKS Nr. 22/23.
 
 ## ⚠️ Blocker auf diesem Rechner: Supabase-CLI (RISKS Nr. 24)
 
@@ -58,7 +58,7 @@ docker ps --format '{{.Names}} {{.Status}}' | findstr mmb-promoter   # Instanz l
 npm test                # Vitest: 9 Dateien, 88 Tests (app-access nur mit laufendem Dev-Server, sonst skipped)
 npx next typegen && npx tsc --noEmit && npx eslint src tests
 npm run dev             # http://127.0.0.1:3001
-git log --oneline       # Stand: 30dc6f8 (E2, ungepusht) + uncommittete E3-Änderungen
+git log --oneline       # Stand: E3 committet (ca25596, 3df108b, d23843a, 125e41d + Nachtrag), lokal = origin/main
 ```
 
 | Was | Wert |
