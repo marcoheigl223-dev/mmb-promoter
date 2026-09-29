@@ -97,6 +97,32 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     expect(r.location).toContain("/login");
   });
 
+  // E3.2 — Admin-Seiten für Termine/Regeln: Operator ja, Promoter nein.
+  it("E3: Operator sieht Termine, Neu-Formular und Regeln", async () => {
+    const cookie = await sessionCookie("operator@mmb-promoter.test", "operator-test-2026");
+    const list = await get("/admin", cookie);
+    expect(list.status).toBe(200);
+    expect(list.text).toContain("Termine und Events");
+    const neu = await get("/admin/termine/neu", cookie);
+    expect(neu.status).toBe(200);
+    expect(neu.text).toContain("Neuer Termin / Event");
+    expect(neu.text).toContain("Internes Event");
+    const rules = await get("/admin/regeln", cookie);
+    expect(rules.status).toBe(200);
+    expect(rules.text).toContain("Provision pro Ticket (Standard)");
+    expect(rules.text).toContain("Gruppenregel (10+1)");
+    expect((await get("/admin/termine/keine-uuid", cookie)).status).toBe(404);
+  });
+
+  it("E3: Promoter kommt auf keine Admin-Seite → /kein-zugang", async () => {
+    const cookie = await sessionCookie("promoter@mmb-promoter.test", "promoter-test-2026");
+    for (const p of ["/admin/termine/neu", "/admin/regeln", "/admin/termine/00000000-0000-4000-8000-000000000000"]) {
+      const r = await get(p, cookie);
+      expect(r.status, p).toBe(307);
+      expect(r.location, p).toContain("/kein-zugang");
+    }
+  });
+
   it("noindex überall: X-Robots-Tag + robots.txt", async () => {
     const res = await fetch(`${APP}/login`);
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");

@@ -165,9 +165,18 @@ describe("tour_departures — nur aktive Profile lesen", () => {
     expect(rows).toEqual([]);
   });
 
-  it("authenticated darf keine Termine schreiben (kein Grant)", async () => {
+  // Bis E2 galt: "authenticated darf keine Termine schreiben (kein Grant)".
+  // Seit Migration 0004 (E3.1) darf der network_operator Kontingent & Co.
+  // schreiben (Spalten-Grant + Policy) — der Promoter weiterhin nicht, und
+  // seats_booked_total bleibt für alle unschreibbar (Hard Rule 4).
+  // Details: tests/events-rules-rls.test.ts.
+  it("Promoter darf keine Termine schreiben (RLS: 0 Zeilen), seats_booked_total für niemanden", async () => {
+    const rows = await asUser(PROMOTER, (tx) =>
+      tx`update tour_departures set capacity_total = 99 where id = ${departureId} returning id`,
+    );
+    expect(rows).toEqual([]);
     await expect(
-      asUser(OPERATOR, (tx) => tx`update tour_departures set capacity_total = 99 where id = ${departureId}`),
+      asUser(OPERATOR, (tx) => tx`update tour_departures set seats_booked_total = 1 where id = ${departureId}`),
     ).rejects.toThrow(/permission denied/);
   });
 });
