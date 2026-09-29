@@ -8,7 +8,8 @@ import postgres from "postgres";
 // Niemals eine Cloud-URL hier eintragen: die Tests legen Daten an und löschen sie.
 const LOCAL_DEFAULT = "postgresql://postgres:postgres@127.0.0.1:45322/postgres";
 
-function readEnvLocal(key: string): string | undefined {
+/** Liest einen Wert aus .env.local (Root). Auch für die Auth-/App-Tests (Anon-Key, API-URL). */
+export function readEnvLocal(key: string): string | undefined {
   try {
     const text = readFileSync(resolve(process.cwd(), ".env.local"), "utf8");
     for (const raw of text.split(/\r?\n/)) {
