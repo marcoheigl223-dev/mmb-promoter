@@ -141,3 +141,73 @@ Nicht gemacht: kein Code, keine Migration, keine Config-Änderung, keine Änderu
 Warum: Marcos Auftrag vom 17.09.2026 („Voll-Diagnose als Grundlage für einen großen Masterplan — nur lesen/analysieren, nichts bauen").
 
 Agent: Claude.
+
+---
+
+## 29.09.2026 — M6: GitHub-Remote gesetzt und gepusht
+
+Was: `git remote add origin https://github.com/marcoheigl223-dev/mmb-promoter.git`, `git push -u origin main` (11 Commits bis `cda94b6`). Vorher geprüft: `supabase/.env.local` (JWT-Secret) ist gitignored und in keinem Commit der History; im Remote-Baum liegen nur die leeren Vorlagen `.env.local.example` und `supabase/.env.example`.
+
+Verifikation: `git remote -v`, `git log origin/main` == lokal, Suche nach dem Secret über die gesamte History leer.
+
+Warum: TASKS M6, Marcos Auftrag 29.09.2026 („Sichere jetzt alles"). Hard Rule 9.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E2 (Config): Passwort-Mindestlänge 12, keine Selbstregistrierung
+
+Was: `supabase/config.toml` — `[auth] minimum_password_length = 12` (war 6), `[auth] enable_signup = false` (neu). `[auth.email] enable_signup` bleibt bewusst `true` mit Kommentar: dieser Schalter ist `GOTRUE_EXTERNAL_EMAIL_ENABLED` und würde auch den E-Mail-Login abschalten (zwischenzeitlich falsch auf `false` gesetzt, vor dem Commit korrigiert). `package.json`: `@supabase/ssr` ^0.12.7, `@supabase/supabase-js` ^2.117.2, `server-only` als Dependencies.
+
+Verifikation: Der Auth-Container musste ohne CLI neu erzeugt werden (RISKS Nr. 24): gleiches Image `gotrue:v2.191.0`, gleiche 70 Env-Variablen bis auf `GOTRUE_PASSWORD_MIN_LENGTH=12` und `GOTRUE_DISABLE_SIGNUP=true`, gleiches Netz/Alias/Labels/Healthcheck; healthy nach 10 s. REST: Login aller Seed-Konten 200; `POST /signup` → 422 `signup_disabled`; `PUT /user` mit 11 Zeichen → 422 `weak_password` („at least 12 characters"); Nutzerzahl unverändert 3. `tests/auth-login.test.ts` 6/6.
+
+Warum: Marcos Auftrag 29.09.2026 („Passwort-Mindestlänge … auf 12 korrigieren"), Diagnose-Befund B2, RISKS Nr. 9. `enable_signup = false` ist eine Härtung über den Auftrag hinaus (Konten legt nur Gabo an, E4) — mit einer Zeile rückgängig zu machen. DECISIONS 29.09., Punkt 4.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E2.1: Migration 0003 (profiles, Rollen, RLS deny-by-default) + Seed
+
+Was: `supabase/migrations/0003_profiles_roles.sql` — Enum `user_role` (`network_operator`, `promoter`); Tabelle `profiles` (id → `auth.users`, `role`, `active`, `display_name`, Zeitstempel); Helfer `current_profile_role()`, `is_active_profile()`, `is_network_operator()` (SQL, stable, security definer, `search_path = public`, Execute nur für `authenticated`/`service_role`); **RLS aktiviert auf `profiles`, `tour_departures`, `bookings`**; Grants: `authenticated` nur SELECT auf `profiles` und `tour_departures`, `service_role` alles auf `profiles`; Policies `profiles_select_own`, `profiles_select_network_operator`, `tour_departures_select_active_profile`; `bookings` bewusst ohne Policy. `supabase/seed.sql` neu — drei lokale Konten in `auth.users`/`auth.identities` + `profiles` (Operator, aktiver Promoter, deaktivierter Promoter; feste UUIDs `1111…`, `2222…`, `3333…`; Zugangsdaten im Dateikopf). `tests/db.ts`: `readEnvLocal` exportiert.
+
+Verifikation: Beide Dateien per `docker exec supabase_db_mmb-promoter psql -1 -v ON_ERROR_STOP=1` eingespielt (CLI blockiert, RISKS Nr. 24); Eintrag `0003 | profiles_roles` in `supabase_migrations.schema_migrations` von Hand nachgetragen. `pg_tables.rowsecurity` = true auf allen drei Tabellen, 3 Nutzer, 3 Profile, 3 Policies, Grants wie geplant. `tests/profiles-rls.test.ts` 16/16 grün: Promoter sieht nur sich; Operator alle; Inaktiver sieht sich (für die Sperr-Anzeige), aber keine Termine; unbekannte `sub` sieht nichts; **gefälschte Rollen-Claims im JWT ohne Wirkung**; `anon` permission denied; `authenticated` kann Termine nicht schreiben, `bookings` nicht lesen, `reserve_departure_seats()` nicht aufrufen. E1-Tests unverändert grün (Handover-Funktion identisch, 8-parallel 1/7).
+
+Warum: TASKS E2.1; Marcos Auftrag („RLS deny-by-default … in diese Etappe", „Rolle serverseitig aus der DB, nie aus dem Token"); Diagnose-Befunde B6/B7. Additiv: berührt nichts aus 0001/0002 (Hard Rule 1/4).
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E2.2: Login, Proxy, Route-Guards, noindex
+
+Was: `src/lib/supabase/server.ts` (SSR-Client pro Request, Cookies getAll/setAll); `src/lib/auth/access.ts` (reine Entscheidung `decideAccess()`, `landingPathFor()`, `areaForPath()`, Bereichs-Tabelle `/admin` → `network_operator`, `/promoter` → `promoter`); `src/lib/auth/dal.ts` (`getCurrentAuth()` mit `getUser()` + Profil aus `profiles` über den RLS-Client, React `cache`; `requireArea()` mit `redirect()`); `src/proxy.ts` (Next.js 16 Proxy: Session-Refresh nach @supabase/ssr-Muster, ohne Session Redirect nach `/login`; Matcher `/admin/:path*`, `/promoter/:path*`, `/login`, `/`); `src/app/login/{page,login-form,actions}` (Server Action `login`: signInWithPassword → Profil aus DB → Ziel nach Rolle; ohne Profil oder inaktiv → sofort `signOut` + Meldung; `logout`); Layouts `src/app/admin/layout.tsx`, `src/app/promoter/layout.tsx` mit `requireArea()` + Abmelden; Platzhalter-Seiten `/admin`, `/promoter`; `/gesperrt`, `/kein-zugang`; `src/app/robots.ts` (Disallow `/`); `next.config.ts` Header `X-Robots-Tag: noindex, nofollow` auf allen Pfaden; Root-Layout `lang="de"`, Titel, `robots: { index: false }`; `src/app/page.tsx` nur noch Verteiler (Create-Next-App-Vorlage entfernt — Begründung: interne App ohne öffentliche Startseite). Root-`.env.local` lokal angelegt (M5, gitignored).
+
+Verifikation: `npx tsc --noEmit` 0 Fehler (nach `next typegen` für `LayoutProps<"/admin">`), `npx eslint src tests` 0; `next dev -p 3001` mit Turbopack läuft, lädt `.env.local` (F9: kein `--webpack`); curl ohne Session: `/`, `/admin`, `/admin/x`, `/promoter`, `/promoter/verkauf` → 307 `/login`; `/login`, `/robots.txt` 200; `X-Robots-Tag` auf allen Antworten. `tests/app-access.test.ts` 7/7 (siehe E2.3). Browser-Test durch Marco steht aus — Anleitung in PROGRESS.md.
+
+Warum: TASKS E2.2; Marcos Auftrag („Login-Seite + Route-Guard für /admin/* und /promoter/* (Next.js 16 Proxy), noindex"). Guides gelesen: proxy, authentication, cookies, server-actions, forms, robots. DECISIONS 29.09., Punkte 2/5/7.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — E2.3: Tests „Promoter kommt nicht ins Admin", „inaktiv kommt nicht rein"
+
+Was: `tests/access-guard.test.ts` (11 Tests, reine Logik ohne DB: Promoter → Admin abgelehnt, Operator → Promoter abgelehnt, inaktiv → `/gesperrt` in beiden Bereichen, fremde Profil-Zeile abgelehnt, Landing nach Rolle, Pfad-Erkennung); `tests/profiles-rls.test.ts` (16, siehe E2.1); `tests/auth-login.test.ts` (6, GoTrue-REST: Seed-Logins 200 mit Token-Rolle `authenticated`, falsches Passwort 400, Signup 422, 11 Zeichen 422 und altes Passwort gilt weiter); `tests/app-access.test.ts` (7, End-to-End gegen `npm run dev` auf 3001 — Session bei GoTrue holen, als `sb-127-auth-token`-Cookie senden: Promoter `/promoter` 200 + `/admin` 307 `/kein-zugang`; Operator `/admin` 200 + `/promoter` 307 `/kein-zugang`; inaktiv → `/gesperrt`; `/` verteilt nach DB-Rolle; kaputtes Token → `/login`; noindex-Header + robots.txt; **wird übersprungen, wenn der Dev-Server nicht läuft**).
+
+Verifikation (wörtlich): `Test Files 7 passed (7) · Tests 53 passed (53)` — 13 aus E1 + 40 neu. `tsc` 0, `eslint` 0.
+
+Warum: TASKS E2.3, Hard Rule 8 (kein Haken ohne Beleg). RISKS Nr. 8 → 🟢, Nr. 9 → 🟡.
+
+Agent: Claude.
+
+---
+
+## 29.09.2026 — Doku-Stand Etappe 2 + Befund Smart App Control
+
+Was: `TASKS.md` M5, M6, E2.1–E2.3 abgehakt mit Belegen. `docs/RISKS.md`: Nr. 7 ergänzt (F9 geklärt), Nr. 8 → 🟢, Nr. 9 → 🟡, **neu Nr. 24** (Windows Smart App Control blockiert `supabase-go.exe` der CLI 2.108 — `status/stop/start/db reset` nicht nutzbar, Docker läuft; Entscheidung Marco), F9 beantwortet (nein), **neu F13** (darf Gabo in den Promoter-Bereich?). `docs/DECISIONS.md`: Eintrag 29.09. (Rollenname, Rolle aus DB, deny-by-default, Signup aus, eine Rolle je Bereich, Seed, DAL). `PROGRESS.md` überschrieben (Stand E2, Wiedereinstieg, Test-Anleitung für beide Rollen, Docker-Ausweichwege).
+
+Warum: Hard Rule 2, Sitzungsende-Regel in AGENTS.md.
+
+Agent: Claude.

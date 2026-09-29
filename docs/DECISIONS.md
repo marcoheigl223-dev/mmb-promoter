@@ -4,6 +4,22 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**29.09.2026 — Etappe 2: Rollenname `network_operator`, Rolle nur aus der DB, deny-by-default, keine Selbstregistrierung**
+
+Entscheidung (Marco, Auftrag 29.09.2026; Ausgestaltung Claude):
+
+1. **Rollen heißen `network_operator` (Gabo) und `promoter`** — nicht „admin" wie in TASKS E2.1 skizziert. Der Bereich in der App heißt weiterhin `/admin`.
+2. **Die Fachrolle wird ausschließlich serverseitig aus `profiles` gelesen, nie aus dem JWT.** Das Token trägt nur die Supabase-Rolle `authenticated`; Policies nutzen `security definer`-Helfer (`current_profile_role()` u. a.), die App liest das Profil über den RLS-geschützten Client (Policy `id = auth.uid()`). Ein gefälschter Rollen-Claim im Token hat nachweislich keine Wirkung (`tests/profiles-rls.test.ts`).
+3. **RLS ist auf allen drei Tabellen aktiv (deny-by-default).** `authenticated` bekommt nur SELECT auf `profiles` (eigene Zeile; Operator alle) und `tour_departures` (nur aktive Profile). `bookings` hat für `authenticated` weder Grant noch Policy — Zugriff bis E5 nur serverseitig über `service_role`. Schreib-Policies kommen erst mit den Features, die sie brauchen.
+4. **Keine Selbstregistrierung** (`enable_signup = false` in `[auth]`), **Passwort-Mindestlänge 12**. Konten legt nur Gabo an (E4; die Admin-API ist von der Sperre nicht betroffen). `[auth.email] enable_signup` bleibt `true`, weil dieser Schalter in GoTrue den E-Mail-Provider samt Login abschalten würde.
+5. **Strikt eine Rolle je Bereich:** Operator kommt nicht in `/promoter/*`, Promoter nicht in `/admin/*` (F13 offen, ob Gabo die Promoter-Sicht braucht).
+6. **Lokale Test-Konten in `supabase/seed.sql`** (drei feste UUIDs, Passwörter sind Testwerte) — läuft nur bei `supabase db reset`, nie bei `db push`; in einer Cloud-Instanz landen sie nicht.
+7. **Autorisierung liegt in der DAL (`requireArea()` in jedem Layout), der Proxy prüft nur optimistisch** auf eine Session — nach Next.js-16-Guide, weil Server Actions den Proxy-Matcher nicht zuverlässig treffen.
+
+Begründung: Marcos Auftrag („Rolle serverseitig aus der DB, nie aus dem Token", „RLS deny-by-default … in diese Etappe, nicht später", „Passwort-Mindestlänge auf 12"), Diagnose-Befunde B2 und B7, RISKS Nr. 9. Der Name `network_operator` beschreibt Gabos Rolle (Netzwerk-Betreiber) genauer als „admin" und vermeidet die Verwechslung mit Supabase-Admin-Rechten.
+
+---
+
 **16.09.2026 — `capacity_total` IST das Kontingent; Etappenplan E1–E8 bestätigt**
 
 Entscheidung (Marco, 16.09.2026): In dieser Datenbank ist `tour_departures.capacity_total` das Kontingent, das Gabo pro Termin/Event manuell einträgt. Eine andere Kapazität (Bootskapazität, Online-Anteil) kennt dieses System nicht. Die Überbuchungssperre der Handover-Funktion (`seats_booked_total + p_seats <= capacity_total` im atomaren UPDATE) wirkt damit **unverändert** gegen das Kontingent — **keine Zusatzlogik, keine zusätzliche Spalte, keine zusätzliche WHERE-Bedingung** nötig. Der Etappenplan in `TASKS.md` Phase 1 (E1 Sicherheitsnetz als Gate, danach E2–E8) ist bestätigt. Die Risiken Nr. 21–23 und die Fragen F11/F12 werden vor Etappe 5 geklärt, für Etappe 1 sind sie nicht nötig.
