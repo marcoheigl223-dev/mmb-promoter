@@ -96,6 +96,7 @@ describe("Migration 0004 — Struktur", () => {
     expect(tables).toEqual([
       { table_name: "commission_rules", privs: "INSERT,SELECT" },
       { table_name: "group_rules", privs: "INSERT,SELECT" },
+      { table_name: "pricing_rules", privs: "INSERT,SELECT" },
       { table_name: "profiles", privs: "SELECT" },
       { table_name: "tour_departures", privs: "SELECT" },
     ]);

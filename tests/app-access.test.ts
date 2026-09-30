@@ -107,10 +107,16 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     expect(neu.status).toBe(200);
     expect(neu.text).toContain("Neuer Termin / Event");
     expect(neu.text).toContain("Internes Event");
+    // E3.4 (F14): eigener Preis/Anzahlung schon beim Anlegen
+    expect(neu.text).toContain("Eigener Ticketpreis pro Person");
+    expect(neu.text).toContain("Eigene Anzahlung pro Person");
     const rules = await get("/admin/regeln", cookie);
     expect(rules.status).toBe(200);
     expect(rules.text).toContain("Provision pro Ticket (Standard)");
     expect(rules.text).toContain("Gruppenregel (10+1)");
+    // E3.4 (F14): Standard-Preis und Standard-Anzahlung als Regeln
+    expect(rules.text).toContain("Ticketpreis pro Person (Standard)");
+    expect(rules.text).toContain("Anzahlung pro Person (Standard)");
     expect((await get("/admin/termine/keine-uuid", cookie)).status).toBe(404);
   });
 
