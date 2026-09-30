@@ -1,7 +1,16 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { CommissionRule, Departure, GroupRule } from "./types";
+import { activeOverrideCents } from "./pricing";
+import {
+  PRICING_KINDS,
+  type CommissionRule,
+  type Departure,
+  type GroupRule,
+  type PricingAmounts,
+  type PricingKind,
+  type PricingRule,
+} from "./types";
 
 /**
  * Lesezugriffe für den Admin-Bereich — immer über den RLS-geschützten Client
@@ -122,5 +131,91 @@ export async function departureCommissionSummary(departureId: string): Promise<{
     effective,
     standard,
     usesOverride: active !== undefined && active.commission_cents !== null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Preis und Anzahlung pro Person (F14, Migration 0005) — gleiches Muster wie Provision
+// ---------------------------------------------------------------------------
+
+const PRICING_COLUMNS = "id, kind, departure_id, amount_cents, valid_from, created_at, created_by";
+
+/** Historie einer Art: departureId = null → Standard, sonst Ausnahmen des Termins. Jüngste zuerst. */
+export async function listPricingRules(
+  kind: PricingKind,
+  departureId: string | null,
+): Promise<PricingRule[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("pricing_rules")
+    .select(PRICING_COLUMNS)
+    .eq("kind", kind)
+    .order("valid_from", { ascending: false })
+    .order("created_at", { ascending: false });
+  query = departureId === null ? query.is("departure_id", null) : query.eq("departure_id", departureId);
+  const { data, error } = await query;
+  if (error) throw new Error(`Preisregeln konnten nicht gelesen werden: ${error.message}`);
+  return (data ?? []) as PricingRule[];
+}
+
+/** Jetzt gültiger Betrag in Cent (DB-Funktion aus 0005). departureId = null → Standard. */
+export async function effectivePriceCents(
+  kind: PricingKind,
+  departureId: string | null,
+): Promise<number | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("effective_price_cents", {
+    p_kind: kind,
+    p_departure_id: departureId,
+  });
+  if (error) throw new Error(`Gültiger Betrag (${kind}) konnte nicht gelesen werden: ${error.message}`);
+  return (data as number | null) ?? null;
+}
+
+/** Beide Standardwerte (Ticketpreis, Anzahlung) — für Formulare und /admin/regeln. */
+export async function standardPricing(): Promise<PricingAmounts> {
+  const [ticket_price, deposit] = await Promise.all(
+    PRICING_KINDS.map((k) => effectivePriceCents(k, null)),
+  );
+  return { ticket_price: ticket_price ?? null, deposit: deposit ?? null };
+}
+
+/** Aktive Ausnahme-Beträge eines Termins (null = Standard gilt) — Grundlage für planPricingWrites(). */
+export async function activePricingOverrides(departureId: string): Promise<PricingAmounts> {
+  const [price, deposit] = await Promise.all(
+    PRICING_KINDS.map((k) => listPricingRules(k, departureId)),
+  );
+  return {
+    ticket_price: activeOverrideCents(price),
+    deposit: activeOverrideCents(deposit),
+  };
+}
+
+/** Preislage eines Termins: gültige Werte, Standard, aktive Ausnahmen, Historie beider Arten. */
+export async function departurePricingSummary(departureId: string): Promise<{
+  effective: PricingAmounts;
+  standard: PricingAmounts;
+  override: PricingAmounts;
+  history: PricingRule[];
+}> {
+  const [effPrice, effDeposit, standard, priceRules, depositRules] = await Promise.all([
+    effectivePriceCents("ticket_price", departureId),
+    effectivePriceCents("deposit", departureId),
+    standardPricing(),
+    listPricingRules("ticket_price", departureId),
+    listPricingRules("deposit", departureId),
+  ]);
+  const history = [...priceRules, ...depositRules].sort((a, b) => {
+    const byValid = new Date(b.valid_from).getTime() - new Date(a.valid_from).getTime();
+    return byValid !== 0 ? byValid : new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+  return {
+    effective: { ticket_price: effPrice, deposit: effDeposit },
+    standard,
+    override: {
+      ticket_price: activeOverrideCents(priceRules),
+      deposit: activeOverrideCents(depositRules),
+    },
+    history,
   };
 }

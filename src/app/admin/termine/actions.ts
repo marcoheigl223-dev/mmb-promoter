@@ -7,12 +7,19 @@ import { requireArea } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { dbErrorMessage } from "@/lib/admin/errors";
 import { parseEuroToCents } from "@/lib/admin/money";
+import {
+  depositAbovePriceError,
+  parseOptionalEuro,
+  planPricingWrites,
+} from "@/lib/admin/pricing";
+import { activePricingOverrides, standardPricing } from "@/lib/admin/queries";
 import { madridLocalToIso } from "@/lib/admin/time";
 import {
   DEPARTURE_STATUSES,
   type DepartureInput,
   type DepartureStatus,
   type FormState,
+  type PricingAmounts,
 } from "@/lib/admin/types";
 
 /**
@@ -21,6 +28,12 @@ import {
  * Einstiegspunkte (Next.js-Guide data-security). Geschrieben wird über den
  * RLS-Client des Nutzers: Policies + Spalten-Grants aus 0004 sind die zweite
  * Schranke (seats_booked_total ist dort gar nicht schreibbar, Hard Rule 4).
+ *
+ * E3.4 (F14): Das Formular trägt zusätzlich zwei optionale Felder — eigener
+ * Ticketpreis und eigene Anzahlung pro Person. Sie landen NICHT in
+ * tour_departures, sondern als append-only-Zeilen in pricing_rules (0005);
+ * leer = Standard. planPricingWrites() entscheidet, ob überhaupt eine neue
+ * Zeile nötig ist.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,6 +72,30 @@ function parseDeparture(fd: FormData): { values: DepartureInput } | { error: str
   };
 }
 
+/** Optionale Felder „eigener Ticketpreis" / „eigene Anzahlung" (leer = Standard). */
+function parsePricing(fd: FormData): { pricing: PricingAmounts } | { error: string } {
+  const price = parseOptionalEuro(String(fd.get("ticket_price_euro") ?? ""));
+  if ("error" in price) return { error: `Eigener Ticketpreis: ${price.error}` };
+  const deposit = parseOptionalEuro(String(fd.get("deposit_euro") ?? ""));
+  if ("error" in deposit) return { error: `Eigene Anzahlung: ${deposit.error}` };
+  return { pricing: { ticket_price: price.cents, deposit: deposit.cents } };
+}
+
+/** Neue pricing_rules-Zeilen für einen Termin schreiben (nur die nötigen). */
+async function writePricing(
+  departureId: string,
+  pricing: PricingAmounts,
+  activeOverride: PricingAmounts,
+): Promise<string | null> {
+  const writes = planPricingWrites(pricing, activeOverride);
+  if (writes.length === 0) return null;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pricing_rules")
+    .insert(writes.map((w) => ({ ...w, departure_id: departureId })));
+  return error ? dbErrorMessage(error) : null;
+}
+
 /** Termin/Event anlegen → danach zur Detailseite. */
 export async function createDeparture(
   _prev: FormState,
@@ -67,6 +104,10 @@ export async function createDeparture(
   await requireArea("admin");
   const parsed = parseDeparture(formData);
   if ("error" in parsed) return { error: parsed.error, ok: null };
+  const pricing = parsePricing(formData);
+  if ("error" in pricing) return { error: pricing.error, ok: null };
+  const plausibility = depositAbovePriceError(pricing.pricing, await standardPricing());
+  if (plausibility) return { error: plausibility, ok: null };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -75,12 +116,23 @@ export async function createDeparture(
     .select("id")
     .single();
   if (error) return { error: dbErrorMessage(error), ok: null };
+  const id = (data as { id: string }).id;
 
+  const pricingError = await writePricing(id, pricing.pricing, {
+    ticket_price: null,
+    deposit: null,
+  });
   revalidatePath("/admin");
-  redirect(`/admin/termine/${(data as { id: string }).id}`);
+  if (pricingError) {
+    return {
+      error: `Termin wurde angelegt, aber Preis/Anzahlung nicht gespeichert: ${pricingError} — bitte auf der Terminseite nachtragen.`,
+      ok: null,
+    };
+  }
+  redirect(`/admin/termine/${id}`);
 }
 
-/** Termin/Event ändern (Titel, Zeit, Kontingent, Status, intern, Notiz). */
+/** Termin/Event ändern (Titel, Zeit, Kontingent, Status, intern, Notiz, Preis/Anzahlung). */
 export async function updateDeparture(
   _prev: FormState,
   formData: FormData,
@@ -90,6 +142,10 @@ export async function updateDeparture(
   if (!UUID_RE.test(id)) return { error: "Ungültiger Termin.", ok: null };
   const parsed = parseDeparture(formData);
   if ("error" in parsed) return { error: parsed.error, ok: null };
+  const pricing = parsePricing(formData);
+  if ("error" in pricing) return { error: pricing.error, ok: null };
+  const plausibility = depositAbovePriceError(pricing.pricing, await standardPricing());
+  if (plausibility) return { error: plausibility, ok: null };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -100,8 +156,13 @@ export async function updateDeparture(
   if (error) return { error: dbErrorMessage(error), ok: null };
   if (!data || data.length === 0) return { error: "Termin nicht gefunden.", ok: null };
 
+  const pricingError = await writePricing(id, pricing.pricing, await activePricingOverrides(id));
+
   revalidatePath("/admin");
   revalidatePath(`/admin/termine/${id}`);
+  if (pricingError) {
+    return { error: `Termin gespeichert, aber Preis/Anzahlung nicht: ${pricingError}`, ok: null };
+  }
   return { error: null, ok: "Gespeichert." };
 }
 

@@ -6,19 +6,25 @@ import {
   effectiveGroupRule,
   listCommissionRules,
   listGroupRules,
+  listPricingRules,
+  standardPricing,
 } from "@/lib/admin/queries";
 import { centsToInputValue, formatCents } from "@/lib/admin/money";
 import { formatMadrid } from "@/lib/admin/time";
-import { GroupRuleForm, StandardCommissionForm } from "./rules-forms";
+import { GroupRuleForm, StandardCommissionForm, StandardPricingForm } from "./rules-forms";
 
 export default async function RulesPage() {
   await requireArea("admin");
-  const [standardNow, standardHistory, groupNow, groupHistory] = await Promise.all([
-    effectiveCommissionCents(null),
-    listCommissionRules(null),
-    effectiveGroupRule(),
-    listGroupRules(),
-  ]);
+  const [standardNow, standardHistory, groupNow, groupHistory, pricingNow, priceHistory, depositHistory] =
+    await Promise.all([
+      effectiveCommissionCents(null),
+      listCommissionRules(null),
+      effectiveGroupRule(),
+      listGroupRules(),
+      standardPricing(),
+      listPricingRules("ticket_price", null),
+      listPricingRules("deposit", null),
+    ]);
 
   return (
     <main className="flex flex-col gap-8">
@@ -34,6 +40,69 @@ export default async function RulesPage() {
       </div>
 
       <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Ticketpreis pro Person (Standard)</h2>
+        <p className="text-sm">
+          Jetzt gültig:{" "}
+          <strong>
+            {pricingNow.ticket_price === null
+              ? "noch nicht eingetragen"
+              : formatCents(pricingNow.ticket_price)}
+          </strong>
+          <span className="text-neutral-500">
+            {" "}
+            — eigene Werte für einzelne Termine/Events setzt du im Termin-Formular.
+          </span>
+        </p>
+        {pricingNow.ticket_price === null && (
+          <p role="alert" className="text-sm text-amber-800 dark:text-amber-300">
+            Ohne Standard-Ticketpreis kann kein Termin ohne eigenen Preis verkauft werden.
+          </p>
+        )}
+        <StandardPricingForm
+          kind="ticket_price"
+          currentInput={
+            pricingNow.ticket_price === null ? "" : centsToInputValue(pricingNow.ticket_price)
+          }
+        />
+        <History
+          rows={priceHistory.map((r) => ({
+            id: r.id,
+            validFrom: r.valid_from,
+            value: r.amount_cents === null ? "—" : formatCents(r.amount_cents),
+            createdAt: r.created_at,
+          }))}
+          valueLabel="Ticketpreis"
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <h2 className="text-lg font-semibold">Anzahlung pro Person (Standard)</h2>
+        <p className="text-sm">
+          Jetzt gültig:{" "}
+          <strong>
+            {pricingNow.deposit === null ? "keine Regel" : formatCents(pricingNow.deposit)}
+          </strong>
+          <span className="text-neutral-500">
+            {" "}
+            — der Rest wird im Bus kassiert. Eigene Werte pro Termin/Event im Termin-Formular.
+          </span>
+        </p>
+        <StandardPricingForm
+          kind="deposit"
+          currentInput={pricingNow.deposit === null ? "" : centsToInputValue(pricingNow.deposit)}
+        />
+        <History
+          rows={depositHistory.map((r) => ({
+            id: r.id,
+            validFrom: r.valid_from,
+            value: r.amount_cents === null ? "—" : formatCents(r.amount_cents),
+            createdAt: r.created_at,
+          }))}
+          valueLabel="Anzahlung"
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <h2 className="text-lg font-semibold">Provision pro Ticket (Standard)</h2>
         <p className="text-sm">
           Jetzt gültig:{" "}

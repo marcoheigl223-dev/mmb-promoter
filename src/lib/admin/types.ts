@@ -53,3 +53,27 @@ export type GroupRule = {
 export type FormState = { error: string | null; ok: string | null };
 
 export const INITIAL_FORM_STATE: FormState = { error: null, ok: null };
+
+/** Migration 0005: Ticketpreis und Anzahlung pro Person als Regeln (append-only). */
+export const PRICING_KINDS = ["ticket_price", "deposit"] as const;
+export type PricingKind = (typeof PRICING_KINDS)[number];
+
+export const PRICING_KIND_LABELS: Record<PricingKind, string> = {
+  ticket_price: "Ticketpreis pro Person",
+  deposit: "Anzahlung pro Person",
+};
+
+export type PricingRule = {
+  id: string;
+  kind: PricingKind;
+  /** null = Standard für alle Termine */
+  departure_id: string | null;
+  /** null (nur bei Ausnahme) = ab hier wieder Standard */
+  amount_cents: number | null;
+  valid_from: string;
+  created_at: string;
+  created_by: string | null;
+};
+
+/** Beide Beträge pro Person in Cent; null = keine gültige Regel. */
+export type PricingAmounts = Record<PricingKind, number | null>;

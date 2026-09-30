@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dbErrorMessage } from "@/lib/admin/errors";
 import { parseEuroToCents } from "@/lib/admin/money";
 import { madridLocalToIso } from "@/lib/admin/time";
-import type { FormState } from "@/lib/admin/types";
+import { PRICING_KINDS, type FormState } from "@/lib/admin/types";
 
 /**
  * Server Actions für die globalen Regeln (E3.2): Provisions-Standard und
@@ -76,4 +76,36 @@ export async function setGroupRule(
 
   revalidatePath("/admin/regeln");
   return { error: null, ok: "Neue Gruppenregel gespeichert." };
+}
+
+/**
+ * Neuer Standard für Ticketpreis ODER Anzahlung pro Person (F14, Migration 0005) —
+ * neue Zeile in pricing_rules mit departure_id NULL. Ausnahmen pro Termin
+ * setzt Gabo im Termin-Formular.
+ */
+export async function setStandardPricing(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireArea("admin");
+  const kind = String(formData.get("kind") ?? "");
+  if (!(PRICING_KINDS as readonly string[]).includes(kind)) {
+    return { error: "Ungültige Regelart.", ok: null };
+  }
+  const amount_cents = parseEuroToCents(String(formData.get("amount_euro") ?? ""));
+  if (amount_cents === null) {
+    return { error: "Bitte einen Betrag in Euro eingeben (z. B. 30,00).", ok: null };
+  }
+  const validFrom = parseValidFrom(formData);
+  if ("error" in validFrom) return { error: validFrom.error, ok: null };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pricing_rules")
+    .insert({ kind, departure_id: null, amount_cents, ...validFrom });
+  if (error) return { error: dbErrorMessage(error), ok: null };
+
+  revalidatePath("/admin/regeln");
+  revalidatePath("/admin", "layout");
+  return { error: null, ok: "Neuer Standard gespeichert." };
 }
