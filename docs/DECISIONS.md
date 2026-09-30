@@ -4,6 +4,21 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**30.09.2026 — F14: Eigener Ticketpreis und eigene Anzahlung pro Termin/Event als append-only-Daten (`pricing_rules`), jeder Termin darf überschreiben, kein geratener Ticketpreis-Standard**
+
+Entscheidung (Marco, Auftrag 30.09.2026, Schritt A; Ausgestaltung Claude, Migration `0005_pricing_rules.sql`):
+
+1. **Ticketpreis und Anzahlung sind Datensätze in derselben Tabelle `pricing_rules`, unterschieden durch `kind` (`ticket_price` | `deposit`)** — gleiches Muster wie `commission_rules` (DECISIONS 29.09., Punkte 1–3): Standard-Zeile mit `departure_id NULL`, Ausnahme pro Termin, `valid_from`, append-only (authenticated nur SELECT/INSERT), Ausnahme mit `amount_cents NULL` = „ab hier wieder Standard". `effective_price_cents(kind, termin, zeitpunkt)` liefert den gültigen Betrag pro Person; E5 speichert ihn pro Buchung als Snapshot (Hard Rule 7, RISKS Nr. 21).
+2. **Jeder Termin/Event darf beides überschreiben, nicht nur interne Events.** Marco: „ein Event/Termin optional einen EIGENEN Preis und eine EIGENE Anzahlung … Interne Events können beides frei setzen." Ein Flag-abhängiges Verbot wäre eine erfundene Regel; das `is_internal`-Flag bleibt reine Kennzeichnung.
+3. **Startwerte als Daten:** Anzahlung 30,00 €/Person ab 16.09.2026 (DECISIONS 16.09., Regel 1). **Kein Startwert für den Ticketpreis** — der reguläre Preis steht in keiner Entscheidung; er wird nicht geraten (Hard Rule 5), sondern von Gabo unter `/admin/regeln` eingetragen (RISKS F15). Bis dahin liefert `effective_price_cents('ticket_price', …)` NULL, `/admin/regeln` warnt, und E5 darf einen Termin ohne Preis nicht verkaufen.
+4. **App-seitige Plausibilität (Ausgestaltung Claude):** Die Anzahlung pro Person darf den Ticketpreis pro Person nicht übersteigen, sonst wäre der „Rest im Bus" negativ. Geprüft in `createDeparture`/`updateDeparture` mit den Werten, die nach dem Speichern gälten (Eingabe, sonst Standard); fehlt ein Wert, wird nicht geprüft. Bewusst kein DB-Constraint, weil Standard und Ausnahme in verschiedenen Zeilen liegen und Gültig-ab-Zeitpunkte sich kreuzen können. Anzahlung = Preis (Vollzahlung) ist erlaubt.
+5. **Pflege im Termin-Formular, nicht in einem separaten Dialog:** zwei optionale Felder (leer = Standard) beim Anlegen und auf der Detailseite. `planPricingWrites` schreibt nur dann eine neue Zeile, wenn sich gegenüber der gerade aktiven Ausnahme etwas ändert (leeres Feld bei aktiver Ausnahme → NULL-Zeile); erneutes Speichern ohne Änderung erzeugt keine Historie-Zeile.
+6. **Lesen dürfen alle aktiven Profile** (Promoter brauchen Preis und Anzahlung im Verkaufs-Flow E5); schreiben nur `network_operator`, `created_by = auth.uid()`. Reserve-Funktion unverändert (Hard Rule 4, Tests grün).
+
+Begründung: Marcos Auftrag 30.09.2026 („eigener Preis + eigene Anzahlung … DB-Daten, nicht Code-Konstanten … RLS: nur network_operator schreibt"), F14 aus RISKS, Vorbedingung für E5 (Beträge pro Buchung, Hard Rule 7). Ersetzt die E3-Vorentscheidung „interne Events vorerst nur eigene Provision" (DECISIONS 29.09., Punkt 5) durch Marcos neue Vorgabe.
+
+---
+
 **29.09.2026 — Etappe 3: Termine/Events, Kontingent und Regeln als Daten (append-only), internes Event = Flag, nur network_operator schreibt**
 
 Entscheidung (Marco, Auftrag 29.09.2026; Ausgestaltung Claude, Migration `0004_events_and_rules.sql`):
