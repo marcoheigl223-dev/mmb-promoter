@@ -25,6 +25,9 @@ export default async function AdminLayout({
           <Link href="/admin" className="underline">
             Termine
           </Link>
+          <Link href="/admin/vorlagen" className="underline">
+            Vorlagen
+          </Link>
           <Link href="/admin/regeln" className="underline">
             Regeln
           </Link>

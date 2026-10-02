@@ -6,6 +6,7 @@ import {
   PRICING_KINDS,
   type CommissionRule,
   type Departure,
+  type EventTemplate,
   type GroupRule,
   type PricingAmounts,
   type PricingKind,
@@ -19,7 +20,7 @@ import {
  */
 
 const DEPARTURE_COLUMNS =
-  "id, title, starts_at, capacity_total, seats_booked_total, status, is_internal, note, created_at";
+  "id, title, starts_at, capacity_total, seats_booked_total, status, is_internal, note, template_id, created_at";
 
 export async function listDepartures(): Promise<Departure[]> {
   const supabase = await createClient();
@@ -218,4 +219,46 @@ export async function departurePricingSummary(departureId: string): Promise<{
     },
     history,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Eventvorlagen (E5.2, Migration 0007) — nur network_operator sieht sie (RLS)
+// ---------------------------------------------------------------------------
+
+const TEMPLATE_COLUMNS =
+  "id, name, title, capacity_total, is_internal, note, ticket_price_cents, deposit_cents, commission_cents, active, created_by, created_at, updated_at";
+
+/** Alle Vorlagen: aktive zuerst, dann nach Name. */
+export async function listTemplates(): Promise<EventTemplate[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("event_templates")
+    .select(TEMPLATE_COLUMNS)
+    .order("active", { ascending: false })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`Vorlagen konnten nicht gelesen werden: ${error.message}`);
+  return (data ?? []) as EventTemplate[];
+}
+
+export async function getTemplate(id: string): Promise<EventTemplate | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("event_templates")
+    .select(TEMPLATE_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`Vorlage konnte nicht gelesen werden: ${error.message}`);
+  return (data as EventTemplate | null) ?? null;
+}
+
+/** Termine, die aus einer Vorlage angelegt wurden (Herkunft), jüngste Startzeit zuerst. */
+export async function listDeparturesFromTemplate(templateId: string): Promise<Departure[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tour_departures")
+    .select(DEPARTURE_COLUMNS)
+    .eq("template_id", templateId)
+    .order("starts_at", { ascending: false });
+  if (error) throw new Error(`Termine der Vorlage konnten nicht gelesen werden: ${error.message}`);
+  return (data ?? []) as Departure[];
 }

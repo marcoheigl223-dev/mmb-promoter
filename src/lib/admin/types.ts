@@ -20,6 +20,8 @@ export type Departure = {
   status: DepartureStatus;
   is_internal: boolean;
   note: string | null;
+  /** E5.2 (0007): Herkunft — aus welcher Vorlage angelegt (null = von Hand). Nur Information, Werte sind kopiert. */
+  template_id: string | null;
   created_at: string;
 };
 
@@ -77,3 +79,39 @@ export type PricingRule = {
 
 /** Beide Beträge pro Person in Cent; null = keine gültige Regel. */
 export type PricingAmounts = Record<PricingKind, number | null>;
+
+/**
+ * Migration 0007 (E5.2): Eventvorlage — Stammdaten, aus denen Gabo Termine anlegt
+ * (nur Datum/Uhrzeit kommen dazu). Beträge null = beim Event gilt der Standard.
+ */
+export type EventTemplate = {
+  id: string;
+  /** Bezeichnung der Vorlage (für die Liste) */
+  name: string;
+  /** Titel, den das Event bekommt */
+  title: string;
+  capacity_total: number;
+  is_internal: boolean;
+  note: string | null;
+  ticket_price_cents: number | null;
+  deposit_cents: number | null;
+  commission_cents: number | null;
+  /** false = deaktiviert (statt löschen) */
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Was Gabo an einer Vorlage pflegt — die Spalten des UPDATE-Grants ohne `active`. */
+export type EventTemplateInput = Pick<
+  EventTemplate,
+  | "name"
+  | "title"
+  | "capacity_total"
+  | "is_internal"
+  | "note"
+  | "ticket_price_cents"
+  | "deposit_cents"
+  | "commission_cents"
+>;

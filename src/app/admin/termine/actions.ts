@@ -167,6 +167,44 @@ export async function updateDeparture(
 }
 
 /**
+ * E5.2 (Migration 0007): Termin/Event aus einer Vorlage anlegen — nur Datum/
+ * Uhrzeit (+ Status) kommen aus dem Formular, alles andere kopiert die DB-
+ * Funktion create_departure_from_template() in EINER Transaktion (Termin +
+ * Preis-/Anzahlungs-/Provisions-Ausnahmen). security invoker: die Policies und
+ * Spalten-Grants aus 0004/0005/0007 gelten unverändert für Gabos Session.
+ */
+export async function createDepartureFromTemplate(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireArea("admin");
+  const templateId = String(formData.get("template_id") ?? "");
+  if (!UUID_RE.test(templateId)) return { error: "Ungültige Vorlage.", ok: null };
+
+  const starts_at = madridLocalToIso(String(formData.get("starts_at") ?? ""));
+  if (!starts_at) return { error: "Bitte Datum und Uhrzeit angeben (Ortszeit Mallorca).", ok: null };
+
+  const status = String(formData.get("status") ?? "open");
+  if (!(DEPARTURE_STATUSES as readonly string[]).includes(status)) {
+    return { error: "Ungültiger Status.", ok: null };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_departure_from_template", {
+    p_template_id: templateId,
+    p_starts_at: starts_at,
+    p_status: status,
+  });
+  if (error) return { error: dbErrorMessage(error), ok: null };
+  const id = data as string | null;
+  if (!id || !UUID_RE.test(id)) return { error: "Termin wurde nicht angelegt.", ok: null };
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/vorlagen/${templateId}`);
+  redirect(`/admin/termine/${id}`);
+}
+
+/**
  * Provisions-Ausnahme für einen Termin/Event setzen — als NEUE Zeile in
  * commission_rules (append-only). mode "standard" schreibt eine Zeile mit
  * commission_cents = NULL: ab dann gilt wieder der Standard.

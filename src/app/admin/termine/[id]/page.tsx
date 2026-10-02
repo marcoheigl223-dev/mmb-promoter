@@ -6,6 +6,7 @@ import {
   departureCommissionSummary,
   departurePricingSummary,
   getDeparture,
+  getTemplate,
 } from "@/lib/admin/queries";
 import { formatCents } from "@/lib/admin/money";
 import { formatMadrid } from "@/lib/admin/time";
@@ -24,9 +25,11 @@ export default async function DeparturePage(props: PageProps<"/admin/termine/[id
   const departure = await getDeparture(id);
   if (!departure) notFound();
 
-  const [{ overrides, effective, standard, usesOverride }, pricing] = await Promise.all([
+  const [{ overrides, effective, standard, usesOverride }, pricing, template] = await Promise.all([
     departureCommissionSummary(id),
     departurePricingSummary(id),
+    // E5.2: Herkunft anzeigen (Werte sind kopiert, kein Live-Bezug)
+    departure.template_id ? getTemplate(departure.template_id) : Promise.resolve(null),
   ]);
   const free = departure.capacity_total - departure.seats_booked_total;
 
@@ -52,6 +55,19 @@ export default async function DeparturePage(props: PageProps<"/admin/termine/[id
           <PricingLine kind="ticket_price" summary={pricing} /> ·{" "}
           <PricingLine kind="deposit" summary={pricing} />
         </p>
+        {departure.template_id && (
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            Aus Vorlage:{" "}
+            {template ? (
+              <Link href={`/admin/vorlagen/${template.id}`} className="underline">
+                {template.name}
+              </Link>
+            ) : (
+              "nicht mehr vorhanden"
+            )}{" "}
+            <span className="text-neutral-500">(Werte wurden beim Anlegen kopiert)</span>
+          </p>
+        )}
       </div>
 
       <section className="flex flex-col gap-3">
