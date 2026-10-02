@@ -120,9 +120,35 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     expect((await get("/admin/termine/keine-uuid", cookie)).status).toBe(404);
   });
 
+  // E5.2 — Eventvorlagen: Liste, Neu-Formular, „Aus Vorlage" auf dem Termin-Formular.
+  it("E5.2: Operator sieht Eventvorlagen, Neu-Formular und „Aus Vorlage“ beim Termin", async () => {
+    const cookie = await sessionCookie("operator@mmb-promoter.test", "operator-test-2026");
+    const list = await get("/admin/vorlagen", cookie);
+    expect(list.status).toBe(200);
+    expect(list.text).toContain("Eventvorlagen");
+    const neu = await get("/admin/vorlagen/neu", cookie);
+    expect(neu.status).toBe(200);
+    expect(neu.text).toContain("Neue Eventvorlage");
+    expect(neu.text).toContain("Eigene Provision pro Ticket");
+    const termin = await get("/admin/termine/neu", cookie);
+    expect(termin.status).toBe(200);
+    expect(termin.text).toContain("Aus Vorlage");
+    expect((await get("/admin/vorlagen/keine-uuid", cookie)).status).toBe(404);
+    // Unbekannte Vorlage per Query → normales Formular mit Hinweis, kein Absturz
+    const unknown = await get("/admin/termine/neu?vorlage=00000000-0000-4000-8000-000000000000", cookie);
+    expect(unknown.status).toBe(200);
+    expect(unknown.text).toContain("Vorlage nicht gefunden");
+  });
+
   it("E3: Promoter kommt auf keine Admin-Seite → /kein-zugang", async () => {
     const cookie = await sessionCookie("promoter@mmb-promoter.test", "promoter-test-2026");
-    for (const p of ["/admin/termine/neu", "/admin/regeln", "/admin/termine/00000000-0000-4000-8000-000000000000"]) {
+    for (const p of [
+      "/admin/termine/neu",
+      "/admin/regeln",
+      "/admin/termine/00000000-0000-4000-8000-000000000000",
+      "/admin/vorlagen",
+      "/admin/vorlagen/neu",
+    ]) {
       const r = await get(p, cookie);
       expect(r.status, p).toBe(307);
       expect(r.location, p).toContain("/kein-zugang");

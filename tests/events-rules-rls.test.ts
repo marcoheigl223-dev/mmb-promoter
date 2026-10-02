@@ -83,8 +83,10 @@ describe("Migration 0004 — Struktur", () => {
       group by privilege_type order by privilege_type
     `;
     const gabo = "capacity_total,is_internal,note,starts_at,status,title";
+    // E5.2 (Migration 0007): Herkunft template_id nur beim Anlegen (INSERT), nie nachträglich (UPDATE).
+    const gaboInsert = "capacity_total,is_internal,note,starts_at,status,template_id,title";
     expect(cols).toEqual([
-      { privilege_type: "INSERT", cols: gabo },
+      { privilege_type: "INSERT", cols: gaboInsert },
       { privilege_type: "UPDATE", cols: gabo },
     ]);
     const tables = await sql`
@@ -99,6 +101,8 @@ describe("Migration 0004 — Struktur", () => {
       { table_name: "booking_audit_log", privs: "SELECT" },
       { table_name: "bookings", privs: "SELECT" },
       { table_name: "commission_rules", privs: "INSERT,SELECT" },
+      // E5.2 (Migration 0007): Vorlagen — UPDATE ist spaltenweise (nicht in table_privileges), kein DELETE.
+      { table_name: "event_templates", privs: "INSERT,SELECT" },
       { table_name: "group_rules", privs: "INSERT,SELECT" },
       { table_name: "notifications", privs: "SELECT" },
       { table_name: "pricing_rules", privs: "INSERT,SELECT" },
