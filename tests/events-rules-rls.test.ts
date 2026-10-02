@@ -93,9 +93,14 @@ describe("Migration 0004 — Struktur", () => {
       where table_schema = 'public' and grantee = 'authenticated'
       group by table_name order by table_name
     `;
+    // E5.1 (Migration 0006): bookings, booking_audit_log, notifications nur SELECT —
+    // geschrieben wird dort ausschließlich über SECURITY-DEFINER-Funktionen (E5.3).
     expect(tables).toEqual([
+      { table_name: "booking_audit_log", privs: "SELECT" },
+      { table_name: "bookings", privs: "SELECT" },
       { table_name: "commission_rules", privs: "INSERT,SELECT" },
       { table_name: "group_rules", privs: "INSERT,SELECT" },
+      { table_name: "notifications", privs: "SELECT" },
       { table_name: "pricing_rules", privs: "INSERT,SELECT" },
       { table_name: "profiles", privs: "SELECT" },
       { table_name: "tour_departures", privs: "SELECT" },

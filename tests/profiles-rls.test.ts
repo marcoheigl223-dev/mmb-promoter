@@ -181,12 +181,18 @@ describe("tour_departures — nur aktive Profile lesen", () => {
   });
 });
 
-describe("bookings — für authenticated komplett gesperrt", () => {
-  it("weder Promoter noch Operator dürfen bookings lesen", async () => {
+// Bis E5.1 war bookings für authenticated komplett gesperrt (weder Grant noch
+// Policy). Seit Migration 0006 gibt es SELECT mit Policies (Promoter nur eigene
+// Zeilen, network_operator alle, deaktiviert nichts) — weiterhin kein
+// INSERT/UPDATE/DELETE. Details: tests/bookings-rls.test.ts.
+describe("bookings — für authenticated nur lesbar (seit 0006), nie schreibbar", () => {
+  it("Promoter/Operator lesen (hier ohne eigene Zeilen: 0), deaktiviert 0, schreiben → permission denied", async () => {
     for (const id of [PROMOTER, OPERATOR, INACTIVE]) {
-      await expect(asUser(id, (tx) => tx`select id from bookings`)).rejects.toThrow(
-        /permission denied/,
-      );
+      const rows = await asUser(id, (tx) => tx`select id from bookings where departure_id = ${departureId}`);
+      expect(rows).toEqual([]);
+      await expect(
+        asUser(id, (tx) => tx`insert into bookings (departure_id, channel, payment_type, seats, total_amount_cents, customer_name, customer_email) values (${departureId}, 'online', 'full', 1, 0, 'x', 'x@x.test')`),
+      ).rejects.toThrow(/permission denied/);
     }
   });
 
