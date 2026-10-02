@@ -4,6 +4,31 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**02.10.2026 — Etappe 5 freigegeben: vier Entscheidungen Marco (Zahlart frei wählbar, Zahlungsstatus manuell, alle Events sichtbar, Storno nur Gabo) + Ausgestaltung E5.1 (Datenmodell, Migration `0006_promoter_sales_model.sql`)**
+
+Entscheidung (Marco, 02.10.2026 — Freigabe von `docs/ETAPPE5_PLAN.md`, D1–D8 bestätigt; verbindlich):
+
+1. **Zahlart frei pro Verkauf:** Der Promoter wählt bei jedem Verkauf zwischen **Vollzahler** und **Anzahlung**. Kein Event schreibt eine Zahlart vor → **F17 beantwortet: nein**, kein `full_only`-Wert, keine Radio-Sperre im Verkaufs-Flow.
+2. **Zahlungsstatus manuell:** Der Promoter markiert selbst „**Anzahlung erhalten**" bzw. „**voll bezahlt**". Ein echtes Zahlungssystem kommt später; bis dahin ist der Status eine manuelle Angabe und **jede Änderung steht im Audit-Log**.
+3. **Promoter sehen ALLE freigegebenen Events** — auch interne (`is_internal`). Das Flag bleibt Kennzeichnung (kein öffentlicher Kanal), es versteckt nichts vor dem Netzwerk.
+4. **Storno ist Teil von E5:** Der Promoter kann **nicht** stornieren (nur Anzeige). **Nur Gabo (`network_operator`) storniert im Admin-Bereich** — mit Sitz-Freigabe zurück ins Kontingent und Audit-Log-Zeile. **Keine Rückerstattung**, außer wenn **wir** das Event absagen. (Provision beim Storno bleibt F10 — nicht Teil dieser Entscheidung.)
+
+Ausgestaltung E5.1 (Claude, Migration `0006_promoter_sales_model.sql`, nur Strukturen — Funktionen folgen in E5.3):
+
+a. **Ein Promoter-Verkauf ist eine `bookings`-Zeile mit `channel = 'promoter'`** (Plan D5) — keine zweite Tabelle `promoter_sales`. Grund: Kontingent-Zähler, Beträge und Buchung bleiben an einem Ort; ein zweiter Bestand könnte vom Zähler in `tour_departures` abweichen; die Handover-Funktion schreibt in dieselbe Tabelle (`channel = 'online'`).
+b. **`seats` bleibt die Personenzahl (= belegtes Kontingent).** Dazu `paid_seats` + `free_persons` mit Check `seats = paid_seats + free_persons` (RISKS Nr. 22: 11 Personen → 11 Sitze, 10 bezahlt, 1 gratis).
+c. **Snapshots pro Buchung** (Hard Rule 7, RISKS Nr. 21): Ticketpreis, Anzahlung, Provision pro Ticket, Gruppenschwelle, Gratisplätze, `commission_total_cents`; `amount_due_cents` (Rest im Bus) ist **generiert** = Gesamt − kassiert und kann nicht abweichen. Check `promoter_booking_complete` erzwingt bei `channel = 'promoter'`, dass Promoter, Idempotenz-Schlüssel, alle Snapshots, Zahlungsstatus und `sold_at` gesetzt sind; bei Zahlart Anzahlung zusätzlich der Anzahlungs-Snapshot. Online-Buchungen bleiben frei → alle neuen Spalten nullable, **Handover-Funktion aus 0002 unverändert** (Hard Rule 4, Identitätstest + 8-parallel-Test grün).
+d. **Enum `payment_status` = `deposit_received` | `fully_paid`** (Entscheidung 2) mit Checks: `fully_paid` ⇔ kassiert = Gesamt; `deposit_received` ⇒ Zahlart Anzahlung und kassiert < Gesamt. Bewusst **kein** Wert „noch nichts kassiert" — ob es den braucht, ist nicht entschieden → **F23**.
+e. **Storno-Felder** `cancelled_at`, `cancelled_by` (→ `profiles`), `cancellation_reason` + Check (beide Zeitpunkt/Person zusammen; `cancelled_at` nur bei Status `cancelled`/`refunded`). Die Status-Werte aus 0001 reichen: `cancelled` = Storno ohne Rückerstattung, `refunded` = nur bei Event-Absage durch uns (Entscheidung 4). `release_departure_seats()` (setzt nur `status`) bleibt verträglich.
+f. **`booking_audit_log`** append-only (Aktionen `sold`, `payment_status_set`, `cancelled`; Handelnder, Rolle, Vorher/Nachher als JSON). **`notifications`** (Plan E5.6) schon jetzt als Datenmodell: Bestätigung + Erinnerung 4 h/1 h pro Buchung, `status = 'pending'` = ausstehend, Kanal NULL bis F20, **kein Versand**.
+g. **RLS/Grants:** `authenticated` hat auf `bookings`, `booking_audit_log`, `notifications` **nur SELECT**; Policies: Promoter liest eigene Buchungen (`is_active_profile() and promoter_id = auth.uid()`) und deren Audit/Nachrichten, `network_operator` alles, deaktiviert/anon nichts. **Geschrieben wird ausschließlich über SECURITY-DEFINER-Funktionen (E5.3)** — kein INSERT/UPDATE/DELETE für `authenticated`, auch nicht für den Operator.
+h. **Idempotenz:** `idempotency_key uuid` + eindeutiger Teilindex (RISKS Nr. 11, Plan D4); die Auswertung (zweiter Aufruf liefert die bestehende Buchung) kommt mit `reserve_promoter_seats()` in E5.3.
+i. **Nicht entschieden, nicht geraten (Hard Rule 5):** `customer_email` bleibt NOT NULL (F8), Anzahlungsbasis/Gesamtbetrag (F16) und 10+1-Fragen (F11/F18) → E5.2, Buchungsstatus bei Bar-Anzahlung (F22) → E5.3.
+
+Begründung: Marcos Auftrag 02.10.2026 („vier Entscheidungen … additiv in DECISIONS.md", „E5.1 Datenmodell-Erweiterung … additiv, RLS deny-by-default, nur passende Rollen schreiben", „8-parallel-Überbuchungstest gegen das Event-Kontingent grün halten"), Hard Rules 1, 4, 5, 7; Plan `docs/ETAPPE5_PLAN.md` D1–D8.
+
+---
+
 **30.09.2026 — F14: Eigener Ticketpreis und eigene Anzahlung pro Termin/Event als append-only-Daten (`pricing_rules`), jeder Termin darf überschreiben, kein geratener Ticketpreis-Standard**
 
 Entscheidung (Marco, Auftrag 30.09.2026, Schritt A; Ausgestaltung Claude, Migration `0005_pricing_rules.sql`):
