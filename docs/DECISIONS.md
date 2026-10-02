@@ -4,6 +4,23 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**02.10.2026 — E5.2 Eventvorlagen: Vorlage = editierbare Stammdaten, „Event aus Vorlage" kopiert die Werte, nur `network_operator`, deaktivieren statt löschen (Migration `0007_event_templates.sql`)**
+
+Entscheidung (Marco, Auftrag 02.10.2026: „Gabo speichert eine Vorlage (Titel, Beträge/Anzahlung, Ticketzahl/Kontingent, Provision, später Bild) und legt daraus neue Events an, bei denen er nur Datum/Uhrzeit ändert. Additiv, RLS deny-by-default (nur network_operator schreibt), als DB-Daten."; Ausgestaltung Claude):
+
+1. **Reihenfolge geändert:** Eventvorlagen sind jetzt **E5.2 / Migration 0007** (im Plan vom 30.09. waren sie E5.8 / 0011). Der frühere Schritt E5.2 „Anzahlungsbasis + 10+1-Option" rückt nach hinten, bis F11/F16/F18 entschieden sind; die Nummern der Folge-Migrationen verschieben sich entsprechend.
+2. **Eine Vorlage ist ein Datensatz in `event_templates`** mit `name` (Bezeichnung für Gabos Liste) **und** `title` (der Titel, den das Event bekommt) — beide Pflicht, kein Eindeutigkeits-Zwang auf den Namen (zwei Vorlagen dürfen gleich heißen; Gabo unterscheidet sie selbst). Dazu Kontingent, `is_internal`, Notiz und drei optionale Beträge (Ticketpreis, Anzahlung, Provision; **NULL = Standard**, derselbe Sinn wie leere Felder am Termin).
+3. **Vorlagen sind editierbare Stammdaten, kein append-only** (Plan D7): Sie tragen keine Abrechnungs-Historie; die kommt aus den Snapshots pro Buchung (0006) und den append-only-Regeln (0004/0005). Änderungen an einer Vorlage betreffen deshalb nur künftige Events.
+4. **„Event aus Vorlage" kopiert** (`create_departure_from_template()`, eine Transaktion): Termin-Zeile mit Titel/Kontingent/intern/Notiz + `template_id` als Herkunft, und für jeden gesetzten Betrag eine Ausnahme-Zeile in `pricing_rules` bzw. `commission_rules` — exakt wie beim Anlegen von Hand. **Kein Live-Bezug:** Eine spätere Vorlagen-Änderung ändert kein bestehendes Event; `template_id` ist nur Information (nur INSERT-Grant, `on delete set null`).
+5. **Die Funktion ist `security invoker`:** Sie schafft keine Rechte, die Policies und Spalten-Grants aus 0004/0005/0007 gelten unverändert für Gabos Session. Ein Promoter bekommt `NOT_ALLOWED` (42501), bevor etwas geschrieben wird.
+6. **Nur `network_operator` sieht und pflegt Vorlagen** (SELECT/INSERT/UPDATE auf Pflege-Spalten, Policies mit `created_by = auth.uid()`). Promoter brauchen sie nicht — sie sehen Events, nicht deren Herkunft. **Kein DELETE-Grant:** `active = false` statt löschen; eine deaktivierte Vorlage erzeugt keine Events (`TEMPLATE_INACTIVE`), bleibt aber als Herkunft lesbar.
+7. **Plausibilität Anzahlung ≤ Preis** zweistufig wie beim Termin: DB-Check nur, wenn beide Beträge in der Vorlage stehen; die App prüft zusätzlich gegen den Standard, wenn nur einer gesetzt ist (DECISIONS 30.09., Punkt 4). Ein Standard, der sich später ändert, wird beim Anlegen des Events erneut mit den dann gültigen Werten wirksam — nicht beim Speichern der Vorlage.
+8. **Nicht enthalten, nicht geraten (Hard Rule 5):** Bild („später Bild" → E5.7 mit Storage-Bucket, F19), Anzahlungsbasis/Gesamtbetrag (F16), 10+1-Mehrfachblock und Anzahlung beim Gratisplatz (F11/F18), keine Startwerte — Vorlagen legt Gabo selbst an.
+
+Begründung: Marcos Auftrag (oben), Plan `docs/ETAPPE5_PLAN.md` D7 („Werte werden kopiert"), Hard Rules 1 (0001–0006 unberührt), 4 (Reserve-Funktion nicht angefasst, 8-parallel-Test grün), 5, 8 (18 RLS-/Funktionstests + Round-Trip durch die Server Actions, `npm test` 167/167).
+
+---
+
 **02.10.2026 — Etappe 5 freigegeben: vier Entscheidungen Marco (Zahlart frei wählbar, Zahlungsstatus manuell, alle Events sichtbar, Storno nur Gabo) + Ausgestaltung E5.1 (Datenmodell, Migration `0006_promoter_sales_model.sql`)**
 
 Entscheidung (Marco, 02.10.2026 — Freigabe von `docs/ETAPPE5_PLAN.md`, D1–D8 bestätigt; verbindlich):
