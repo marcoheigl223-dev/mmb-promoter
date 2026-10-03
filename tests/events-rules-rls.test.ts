@@ -107,6 +107,11 @@ describe("Migration 0004 — Struktur", () => {
       { table_name: "notifications", privs: "SELECT" },
       { table_name: "pricing_rules", privs: "INSERT,SELECT" },
       { table_name: "profiles", privs: "SELECT" },
+      // E5.5a (Migration 0011): Auswertungs-Sichten, security_invoker → RLS von bookings gilt.
+      { table_name: "sales_by_day", privs: "SELECT" },
+      { table_name: "sales_by_departure", privs: "SELECT" },
+      { table_name: "sales_by_promoter", privs: "SELECT" },
+      { table_name: "sales_totals", privs: "SELECT" },
       { table_name: "tour_departures", privs: "SELECT" },
     ]);
   });
