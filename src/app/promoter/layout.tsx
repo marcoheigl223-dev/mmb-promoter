@@ -8,7 +8,7 @@ export default async function PromoterLayout({
   const profile = await requireArea("promoter");
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
       <header className="mb-6 flex items-center justify-between border-b border-neutral-200 pb-4 dark:border-neutral-800">
         <div>
           <p className="text-xs uppercase tracking-wide text-neutral-500">
