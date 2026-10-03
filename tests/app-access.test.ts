@@ -155,6 +155,33 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     }
   });
 
+  // E5.4 — Verkaufs-Kern: Promoter sieht Events + eigene Verkäufe, Verkaufsseiten
+  // sind nur für Promoter; Gabo (strikt eine Rolle je Bereich, F13) kommt nicht hin.
+  it("E5.4: Promoter sieht Event-Liste und Verkaufsseiten, Operator nicht", async () => {
+    const cookie = await sessionCookie("promoter@mmb-promoter.test", "promoter-test-2026");
+    const home = await get("/promoter", cookie);
+    expect(home.status).toBe(200);
+    expect(home.text).toContain("Events verkaufen");
+    expect(home.text).toContain("Meine letzten Verkäufe");
+    for (const p of [
+      "/promoter/verkaufen/keine-uuid",
+      "/promoter/verkaufen/00000000-0000-4000-8000-000000000000",
+      "/promoter/verkaeufe/keine-uuid",
+      "/promoter/verkaeufe/00000000-0000-4000-8000-000000000000",
+    ]) {
+      expect((await get(p, cookie)).status, p).toBe(404);
+    }
+    const op = await sessionCookie("operator@mmb-promoter.test", "operator-test-2026");
+    for (const p of ["/promoter/verkaufen/00000000-0000-4000-8000-000000000000", "/promoter/verkaeufe/00000000-0000-4000-8000-000000000000"]) {
+      const r = await get(p, op);
+      expect(r.status, p).toBe(307);
+      expect(r.location, p).toContain("/kein-zugang");
+    }
+    const anon = await get("/promoter/verkaufen/00000000-0000-4000-8000-000000000000");
+    expect(anon.status).toBe(307);
+    expect(anon.location).toContain("/login");
+  });
+
   it("noindex überall: X-Robots-Tag + robots.txt", async () => {
     const res = await fetch(`${APP}/login`);
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");

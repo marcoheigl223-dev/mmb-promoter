@@ -60,6 +60,7 @@ function promoterRow(overrides: Row = {}): Row {
     status: "confirmed",
     customer_name: "TEST-e51 Kunde",
     customer_email: "e51@example.invalid",
+    customer_phone: "+00 000 000 001",
     promoter_id: PROMOTER,
     idempotency_key: crypto.randomUUID(),
     ticket_price_cents_snapshot: 4000,
@@ -69,6 +70,9 @@ function promoterRow(overrides: Row = {}): Row {
     group_free_snapshot: 1,
     commission_total_cents: 3000,
     payment_status: "deposit_received",
+    // seit 0010 (E5.4): vereinbarte Anzahlung + Basis pro Buchung
+    deposit_basis: "paying_persons",
+    deposit_total_cents: 9000,
     sold_at: new Date(),
     ...overrides,
   };
@@ -94,6 +98,8 @@ beforeAll(async () => {
       amount_paid_cents: 12000,
       payment_status: "fully_paid",
       deposit_amount_cents_snapshot: null,
+      deposit_basis: null,
+      deposit_total_cents: null,
     }),
   );
   // Online-Buchung über die unveränderte Handover-Funktion (Hard Rule 4)
@@ -158,7 +164,8 @@ describe("Migration 0006 — Struktur", () => {
       { name: "notification_channel", labels: ["email", "sms", "whatsapp"] },
       { name: "notification_kind", labels: ["booking_confirmation", "reminder_4h", "reminder_1h"] },
       { name: "notification_status", labels: ["pending", "sent", "failed", "cancelled", "skipped"] },
-      { name: "payment_status", labels: ["deposit_received", "fully_paid"] },
+      // 0009 (E5.4): dritte Stufe „noch nichts kassiert" vor deposit_received
+      { name: "payment_status", labels: ["not_collected", "deposit_received", "fully_paid"] },
     ]);
   });
 
@@ -243,7 +250,7 @@ describe("Promoter-Verkauf als bookings-Zeile — Checks (Hard Rule 7 in der DB)
 
   it("10+1: 11 Sitze belegt, 10 bezahlt, 1 gratis — Sitze = bezahlt + gratis wird erzwungen", async () => {
     const id = await insertBooking(
-      promoterRow({ seats: 11, paid_seats: 10, free_persons: 1, total_amount_cents: 40000, amount_paid_cents: 30000, commission_total_cents: 10000 }),
+      promoterRow({ seats: 11, paid_seats: 10, free_persons: 1, total_amount_cents: 40000, amount_paid_cents: 30000, deposit_total_cents: 30000, commission_total_cents: 10000 }),
     );
     const [b] = await sql`select seats, paid_seats, free_persons, amount_due_cents from bookings where id = ${id}`;
     expect(b).toEqual({ seats: 11, paid_seats: 10, free_persons: 1, amount_due_cents: 10000 });
