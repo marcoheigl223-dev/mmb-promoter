@@ -14,14 +14,14 @@ export default async function AdminLayout({
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <header className="mb-6 flex items-center justify-between border-b border-neutral-200 pb-4 dark:border-neutral-800">
+      <header className="mb-6 flex items-center justify-between gap-4 border-b border-neutral-200 pb-4 dark:border-neutral-800">
         <div>
           <p className="text-xs uppercase tracking-wide text-neutral-500">
             Admin · network_operator
           </p>
           <p className="font-medium">{profile.display_name}</p>
         </div>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-sm">
           <Link href="/admin" className="underline">
             Termine
           </Link>
@@ -30,6 +30,9 @@ export default async function AdminLayout({
           </Link>
           <Link href="/admin/regeln" className="underline">
             Regeln
+          </Link>
+          <Link href="/admin/konten" className="underline">
+            Konten
           </Link>
           <form action={logout}>
             <button type="submit" className="underline">

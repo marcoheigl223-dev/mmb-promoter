@@ -7,7 +7,15 @@
  * wohin der Nutzer darf, entscheidet ausschließlich die Profil-Zeile.
  */
 
-export type UserRole = "network_operator" | "promoter";
+/** Teil 2 (0012/0013): dritte Rolle "guide" — verkauft wie ein Promoter. */
+export type UserRole = "network_operator" | "promoter" | "guide";
+
+/** Rollen-Bezeichnung für die Oberfläche. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  network_operator: "Gabo (network_operator)",
+  promoter: "Promoter",
+  guide: "Guide",
+};
 
 export type Profile = {
   id: string;
@@ -16,11 +24,19 @@ export type Profile = {
   display_name: string;
 };
 
-/** Geschützte Bereiche und die Rolle, die hinein darf. */
+/**
+ * Geschützte Bereiche und die Rollen, die hinein dürfen. Positivliste: eine
+ * neue Rolle kommt nirgends hinein, solange sie hier nicht eingetragen ist.
+ * Der Guide arbeitet im Promoter-Bereich (verkaufen, eigenes Dashboard) —
+ * /admin bleibt allein dem network_operator (Teil 2, Marco 03.10.2026).
+ */
 export const AREAS = {
-  admin: { path: "/admin", role: "network_operator" },
-  promoter: { path: "/promoter", role: "promoter" },
-} as const satisfies Record<string, { path: string; role: UserRole }>;
+  admin: { path: "/admin", roles: ["network_operator"] },
+  promoter: { path: "/promoter", roles: ["promoter", "guide"] },
+} as const satisfies Record<
+  string,
+  { path: string; roles: readonly UserRole[] }
+>;
 
 export type Area = keyof typeof AREAS;
 
@@ -58,7 +74,7 @@ export function decideAccess(input: {
   if (!profile.active) {
     return { kind: "redirect", to: BLOCKED_PATH, reason: "inactive" };
   }
-  if (profile.role !== AREAS[area].role) {
+  if (!(AREAS[area].roles as readonly UserRole[]).includes(profile.role)) {
     return { kind: "redirect", to: NO_ACCESS_PATH, reason: "wrong_role" };
   }
   return { kind: "allow", profile };
@@ -68,9 +84,11 @@ export function decideAccess(input: {
 export function landingPathFor(profile: Profile | null): string {
   if (!profile) return NO_ACCESS_PATH;
   if (!profile.active) return BLOCKED_PATH;
-  return profile.role === "network_operator"
-    ? AREAS.admin.path
-    : AREAS.promoter.path;
+  if (profile.role === "network_operator") return AREAS.admin.path;
+  if (profile.role === "promoter" || profile.role === "guide") {
+    return AREAS.promoter.path;
+  }
+  return NO_ACCESS_PATH; // unbekannte Rolle: nirgends hinein
 }
 
 /** Welcher geschützte Bereich gehört zu einem Pfad? (für den Proxy) */

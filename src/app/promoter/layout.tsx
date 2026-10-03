@@ -1,9 +1,13 @@
 import Link from "next/link";
 
+import { ROLE_LABELS } from "@/lib/auth/access";
 import { requireArea } from "@/lib/auth/dal";
 import { logout } from "@/app/login/actions";
 
-/** Schutz für /promoter/*: nur aktive Profile mit Rolle promoter. */
+/**
+ * Schutz für /promoter/*: nur aktive Profile mit Rolle promoter oder guide
+ * (Teil 2: der Guide verkauft wie ein Promoter und sieht sein eigenes Dashboard).
+ */
 export default async function PromoterLayout({
   children,
 }: LayoutProps<"/promoter">) {
@@ -14,7 +18,7 @@ export default async function PromoterLayout({
       <header className="mb-6 flex items-center justify-between border-b border-neutral-200 pb-4 dark:border-neutral-800">
         <div>
           <p className="text-xs uppercase tracking-wide text-neutral-500">
-            Promoter
+            {ROLE_LABELS[profile.role]}
           </p>
           <p className="font-medium">{profile.display_name}</p>
         </div>
