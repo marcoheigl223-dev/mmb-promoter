@@ -4,6 +4,34 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**02.10.2026 — F22/F23: Zahlungsstatus in drei Stufen, neuer Promoter-Verkauf startet mit „Anzahlung erhalten"; F11/F18: Anzahlungsbasis bei 10+1 = Standard „nur zahlende Köpfe", pro Verkauf umstellbar; E5.3 = Event-Bilder (Migration `0008_event_images.sql`), Funktionen → E5.4 / 0009**
+
+Entscheidung (Marco, 02.10.2026 — Antworten auf die vor E5.3 gestellten Fragen, verbindlich):
+
+1. **F22/F23 — Der Zahlungsstatus einer Buchung hat drei Stufen:** „noch nichts kassiert" → „Anzahlung erhalten" → „voll bezahlt". **Storno ist ein separater Status/Flag, nicht Teil dieser Kette.**
+2. **F23 — Ein neuer Promoter-Verkauf startet direkt mit Status „Anzahlung erhalten"** (der Promoter kassiert am Strand). Promoter und Gabo können ihn danach ändern. **Jede Änderung ins Audit-Log.**
+3. **F11/F18 — Anzahlungsbasis bei 10+1: alle drei Varianten sind immer möglich. STANDARD = Anzahlung nur für die zahlenden Köpfe (ohne Gratisplätze)**, umstellbar pro Verkauf; die anderen Varianten: alle Köpfe inkl. gratis / freier Gesamtbetrag. Als wählbare Option beim Verkauf.
+4. **Reihenfolge: E5.3 = Bild-Upload für Events/Vorlagen (Migration 0008).** Bild pro Event + pro Vorlage (Supabase Storage, lokal), Anzeige im Admin + später im Promoter-Dashboard; nur `network_operator` lädt hoch, Größenlimit ~5 MB, Formate jpg/png/webp, web-optimiert, Vorlagen-Bild wird beim Event-Anlegen übernommen; additiv, Storage-Policies deny-by-default. Die Funktionen (`quote_promoter_sale()`, `reserve_promoter_seats()`, Zahlungsstatus, Storno, Nachrichten — bisher „E5.3 / 0008") rücken auf **E5.4 / Migration 0009**.
+
+Konsequenzen für Schema und Code (Ausgestaltung Claude — Punkte a–d werden erst in E5.4/E5.5 gebaut):
+
+a. **Enum `payment_status` bekommt additiv einen dritten Wert** für „noch nichts kassiert" (`alter type … add value`, E5.4); der Check aus 0006 wird um diese Stufe ergänzt (kassiert = 0). Das ersetzt die Zwei-Werte-Annahme aus E5.1 (Punkt d dort). `cancelled`/`refunded` bleiben Werte von `bookings.status` — Storno ist nicht Teil der Zahlungs-Kette (Punkt 1).
+b. **`reserve_promoter_seats()` setzt beim Anlegen `deposit_received`** (Punkt 2). Ob ein Verkauf mit Zahlart **Vollzahlung** direkt als „voll bezahlt" startet, hat Marco nicht gesagt — der Check `fully_paid ⇔ kassiert = Gesamt` aus 0006 verlangt es → **F24** in RISKS, nicht geraten. Statusänderung = eigene SECURITY-DEFINER-Funktion für Promoter (nur eigene Buchung) und Gabo (alle), jede mit `booking_audit_log`-Zeile `payment_status_set` (Vorher/Nachher).
+c. **Anzahlungsbasis wird ein Feld pro Buchung** (drei Werte: zahlende Köpfe / alle Köpfe inkl. gratis / freier Gesamtbetrag; Default „zahlende Köpfe" im Verkaufs-Flow; bei „freier Gesamtbetrag" tippt der Promoter den Betrag). Damit ist die frühere Idee „Gabo gibt die Basis am Event vor" (Plan E5.2 alt, F16) überholt: die Wahl liegt beim Verkauf. Offen bleiben F16-Rest (freier Betrag über dem Gesamtpreis: kappen oder ablehnen?) und **F18** (Mehrfach-Block 22 Personen → 2 gratis?) — Marcos Antwort betrifft die Basis, nicht die Blockzahl.
+d. **Buchungsstatus (`bookings.status`) bei Bar-Anzahlung (F22):** Marco hat die Zahlungsstufen genannt, nicht den Buchungsstatus. Interpretation Claude: Verkauf mit kassiertem Geld = `confirmed`, nicht `pending` — in RISKS F22 so protokolliert, leicht änderbar, bevor E5.4 baut.
+
+Ausgestaltung E5.3 — Event-Bilder (Claude, Migration `0008_event_images.sql`, Storage-Bucket `event-images`):
+
+e. **Bucket privat (F19 → privat):** „deny-by-default" schließt einen öffentlichen Bucket aus. Lesen nur für aktive Profile (`is_active_profile()`) über **signierte URLs (1 h)**, die der Server mit dem RLS-Client des Nutzers erzeugt; Hochladen/Ändern/Löschen nur `is_network_operator()` — alles als Policies auf `storage.objects`, jeweils auf `bucket_id = 'event-images'` begrenzt. Zusätzlich Bucket-Limit 5 MiB und MIME-Liste `image/jpeg`, `image/png`, `image/webp` in `storage.buckets` (zweite Schranke neben der App-Prüfung).
+f. **Pfad statt URL in der DB:** `image_path text` (nullable, max. 500 Zeichen, kein `..`) auf `event_templates` **und** `tour_departures`; Objektpfade `templates/<vorlagen-id>/<uuid>.webp` bzw. `departures/<termin-id>/<uuid>.webp`. **Jeder Upload ist ein neues Objekt** (nie überschreiben — kein veralteter Browser-Cache, kein Wettlauf); das vorherige Objekt wird nur gelöscht, wenn keine Vorlage und kein Termin es mehr referenziert.
+g. **„Vorlagen-Bild wird beim Event-Anlegen übernommen" = Pfad kopieren**, kein zweites Objekt: `create_departure_from_template()` (gleiche Signatur, `create or replace` in 0008) kopiert `image_path` wie Titel/Kontingent/Beträge. Kein Live-Bezug (wie Punkt 4 der E5.2-Entscheidung): bekommt die Vorlage später ein anderes Bild, behält das Event seins — deshalb Regel f (altes Objekt nur löschen, wenn unreferenziert). Das Event-Bild lässt sich am Termin einzeln ersetzen oder entfernen.
+h. **Web-optimiert serverseitig, immer WebP:** die Server Action prüft Größe (≤ 5 MB) und MIME (jpg/png/webp), dann wandelt `sharp` das Bild um — EXIF-Ausrichtung angewendet, längste Kante max. 1600 px (nie vergrößert), WebP Qualität 80, Metadaten entfernt. Gespeichert wird nur das Ergebnis; das Original verlässt den Request nicht. `experimental.serverActions.bodySizeLimit` auf 6 MB (Multipart-Overhead über dem 5-MB-Limit).
+i. **Grants minimal:** `authenticated` darf `image_path` auf `tour_departures` INSERT+UPDATE und auf `event_templates` UPDATE (Spalten-Grants wie 0004/0007); Policies unverändert (`is_network_operator()`). Promoter lesen das Bild über die bestehenden SELECT-Policies (Termin) + Storage-SELECT-Policy; Vorlagen bleiben für sie unsichtbar.
+
+Begründung: Marcos Nachricht 02.10.2026 (Antworten F22/F23/F11/F18 wörtlich wie oben, E5.3-Auftrag „Bild-Upload für Events/Vorlagen … Additiv, Storage-Policies deny-by-default. git diff + Test, committe erst nach meiner Bestätigung. Danach Stopp vor E5.4."). Hard Rules 1 (0001–0007 unberührt, Funktion per `create or replace` additiv erweitert), 4 (Reserve-Funktion nicht angefasst), 5 (F16-Rest, F18, F24 offen), 7, 8.
+
+---
+
 **02.10.2026 — E5.2 Eventvorlagen: Vorlage = editierbare Stammdaten, „Event aus Vorlage" kopiert die Werte, nur `network_operator`, deaktivieren statt löschen (Migration `0007_event_templates.sql`)**
 
 Entscheidung (Marco, Auftrag 02.10.2026: „Gabo speichert eine Vorlage (Titel, Beträge/Anzahlung, Ticketzahl/Kontingent, Provision, später Bild) und legt daraus neue Events an, bei denen er nur Datum/Uhrzeit ändert. Additiv, RLS deny-by-default (nur network_operator schreibt), als DB-Daten."; Ausgestaltung Claude):
