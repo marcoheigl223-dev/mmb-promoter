@@ -4,6 +4,55 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**03.10.2026 — Teil 2: Guide als dritte Rolle, Konto-Verwaltung durch Gabo, neue Reihenfolge Teil 2–6 (Migrationen `0012_user_role_guide.sql`, `0013_guide_role_accounts.sql`)**
+
+Entscheidung (Marco, 03.10.2026 — nach Bestätigung von Teil 1, verbindlich):
+
+1. **Guide = dritte Rolle mit allen Promoter-Funktionen plus Extras.** Der Guide verkauft wie ein Promoter und hat ein eigenes Dashboard mit eigenen Zahlen. Die Extras (Tagesbestellungen, Abkassier-Übersicht, eigene Provision) kommen in Teil 4.
+2. **Gabo legt Promoter- und Guide-Profile an** und kann sie im Admin aktivieren, deaktivieren und ihr Passwort setzen. Promoter und Guides werden getrennt geführt.
+3. **Status-Fluss neu wie besprochen** (bestätigt die Entscheidung „Nach der Diagnose“, Punkt 1): Bestellung → Mail → Gast bestätigt → kassiert → final. Ab „final“ kann der Promoter nichts mehr ändern.
+4. **E-Mail nur als Logik** (bestätigt dort Punkt 3): Die Mail liegt als „ausstehend“ in der Queue. Der echte Versand kommt beim Live-Setup.
+5. **Neue Reihenfolge, ersetzt „Teil 3–5 nach Bestätigung“:**
+   - Teil 2 = Guide-Rolle (nur Rolle, Verkaufen, Anlegen)
+   - Teil 3 = Gabos Auswertungs-Dashboard (= E5.5c, pro Promoter **und** pro Guide, „was Gabo an wen abgibt“)
+   - Teil 4 = Guide-Extras
+   - Teil 5 = Status-Fluss neu
+   - Teil 6 = E-Mail-Logik
+   - Ein Teil nach dem anderen, keine parallelen Subagenten, `git diff` vor jedem Commit, Stopp nach jedem Teil.
+
+Ausgestaltung Teil 2 (Claude):
+
+a. **Zwei Migrationen wie 0009/0010:** 0012 enthält nur `alter type user_role add value 'guide'`. Der neue Wert ist erst nach dem COMMIT benutzbar, deshalb steht alles, was ihn benutzt, in 0013.
+b. **Verkaufen:**
+   - Neuer Helfer `is_selling_profile()` (aktiver Promoter oder Guide, Rolle aus `profiles`).
+   - `reserve_promoter_seats()` wird per `create or replace` mit **gleicher Signatur** ersetzt. Geändert sind nur die Rollenprüfung (promoter|guide) und `actor_role` der Audit-Zeile (die echte Rolle).
+   - Das atomare UPDATE bleibt **wörtlich** (Hard Rule 4). Identitätstest und 8-parallel-Test sind grün.
+   - Die Lese-Policies aus 0006/0011 passen unverändert (`promoter_id = auth.uid()`). Ein Guide sieht deshalb genau seine eigenen Verkäufe, auch in den Summen der Sichten.
+c. **Lücke geschlossen in `set_booking_payment_status()`:** 0010 hat „fremde Buchung“ nur für `role = 'promoter'` geprüft. Ein Guide wäre dort wie Gabo behandelt worden. Jetzt gilt eine Positivliste: Nur `network_operator` darf fremde Buchungen ändern, jede andere Rolle nur eigene. Eine fremde Buchung liefert `BOOKING_NOT_FOUND`, verrät also nicht, dass es sie gibt.
+d. **Bereichszugang über eine Positivliste** (`AREAS` in `src/lib/auth/access.ts`): `/admin` nur für `network_operator`, `/promoter` für `promoter` und `guide`. Jede künftige Rolle kommt nirgends hinein, bis sie ausdrücklich eingetragen ist (Test „unbekannte Rolle“). Gabo bleibt außerhalb von `/promoter` (F13 unverändert offen).
+e. **Konto-Verwaltung `/admin/konten`:**
+   - Promoter und Guides in getrennten Abschnitten, je „Neuen Promoter/Guide anlegen“.
+   - Detailseite mit Status (aktivieren/deaktivieren), Name und Passwort setzen. Das eigene Operator-Konto ist dort nicht erreichbar (404).
+   - Passwort 12–72 Byte (Mindestlänge wie `config.toml`, Obergrenze von bcrypt).
+f. **`service_role` nur für die GoTrue-Admin-API** (`createAuthAdminClient()` gibt nur `auth.admin` heraus): Konto anlegen, Passwort setzen und Rollback. Es ist die einzige Stelle, an der die App den Schlüssel benutzt (Abweichung von DECISIONS 29.09. E3, Punkt 8, nur für Auth-Konten).
+   - Jede Action prüft vorher `requireArea("admin")`.
+   - Beim Passwortsetzen prüft die Action das Zielkonto zuerst über Gabos RLS-Client (nur promoter/guide).
+   - Das **Profil** schreibt Gabo über seinen RLS-Client und die neuen Policies.
+   - Scheitert das Profil, wird das gerade angelegte Auth-Konto wieder gelöscht.
+g. **`profiles`-Rechte (0013):**
+   - INSERT nur für `network_operator` und nur mit Rolle promoter|guide. Über die App entsteht also kein zweiter Operator.
+   - UPDATE nur auf `active` und `display_name`, nur bei Zeilen mit Rolle promoter|guide. Gabos eigenes Profil ist nicht änderbar.
+   - **Die Rolle ist unveränderlich**, auch für Gabo (kein Spalten-Grant). Ob ein Konto zugleich Promoter und Guide sein kann, ist offen (F29).
+   - **Kein DELETE**, stattdessen deaktivieren.
+   - `updated_at` per Trigger.
+h. **Test-Guide im Seed:** `guide@mmb-promoter.test` / `guide-test-2026`, feste UUID `44444444-…`, nur lokal (`supabase/seed.sql`).
+i. **Nicht in Teil 2 (bewusst):** Guide-Extras und Guide-Rechte pro Event (Teil 4, F29/F30/F31), Guide-Provision anders als beim Promoter (F31; heute gilt derselbe Snapshot), Status-Fluss (Teil 5).
+j. **Tests robuster statt Daten löschen:** `bookings-rls` und `profiles-rls` grenzen ihre Erwartungen auf die eigenen Test- bzw. Seed-Zeilen ein. Marcos Browser-Verkauf in der lokalen DB bleibt stehen.
+
+Begründung: Marcos Auftrag 03.10.2026 („Rolle "guide" einführen … RLS deny-by-default, Rollenprüfung serverseitig … Gabo kann im Admin Promoter- UND Guide-Profile anlegen/aktivieren/deaktivieren/Passwort setzen (getrennt) … Guide NICHT in /admin … jede Rolle nur Eigenes … Nur die Rolle + Verkaufen + Anlegen“). Hard Rules 1, 3, 4, 5, 8, 9.
+
+---
+
 **03.10.2026 — Nach der Diagnose E5.5 (Marco): neuer Status-Fluss ersetzt den alten, Guide als dritte Rolle, E-Mail nur als Queue-Logik; fünf Teile nacheinander, Teil 1 = Dashboard erreichbar**
 
 Entscheidung (Marco, 03.10.2026 — nach Lesen von `docs/DIAGNOSE_E5-5_ROLLEN.md`, verbindlich):

@@ -643,3 +643,80 @@ Was: Marco hat Teil 1 bestätigt („Dashboard verlinkt, Zahlen passen“). Comm
 Warum: Hard Rule 3 (Commit erst nach Marcos Bestätigung). Der rote Test `bookings-rls` (Marcos Browser-Verkauf in der lokalen DB) wird in Teil 2 robuster gemacht, statt den Verkauf zu löschen.
 
 Agent: Claude.
+
+---
+
+**03.10.2026 — Teil 2: Guide als dritte Rolle + Konto-Verwaltung durch Gabo (Migrationen 0012/0013)**
+
+Was:
+- **Migration `0012_user_role_guide.sql`:** nur der Enum-Wert `user_role` `guide`. Er muss vor seiner Nutzung committet sein, gleiches Muster wie 0009/0010.
+- **Migration `0013_guide_role_accounts.sql`:**
+  - `is_selling_profile()`: aktiver Promoter oder Guide.
+  - `reserve_promoter_seats()`: `create or replace`, gleiche Signatur. Geändert sind nur die Rollenprüfung (promoter|guide) und die Audit-Rolle (echte Rolle). Das UPDATE ist wörtlich unverändert.
+  - `set_booking_payment_status()`: **Lücke geschlossen**. 0010 hätte einen Guide wie Gabo behandelt. Jetzt darf nur `network_operator` fremde Buchungen ändern, sonst `BOOKING_NOT_FOUND`.
+  - `profiles`: Trigger `updated_at`; Spalten-Grants INSERT (id, role, display_name, active) und UPDATE (active, display_name); Policies nur für `network_operator` und nur auf Zeilen mit Rolle promoter|guide; kein DELETE.
+  - Beide Migrationen per `docker exec … psql` eingespielt, Historie-Zeilen `0012`/`0013` nachgetragen (RISKS Nr. 24).
+- **Seed:** Test-Guide `guide@mmb-promoter.test` / `guide-test-2026` (UUID `44444444-…`, „Test-Guide“). Lokal per psql eingespielt, weil `db reset` blockiert ist.
+- **App:**
+  - `src/lib/auth/access.ts`: Rolle `guide`, `ROLE_LABELS`, Positivliste `AREAS` (`/admin` = network_operator, `/promoter` = promoter + guide).
+  - Promoter-Kopfzeile zeigt die Rolle („Promoter“/„Guide“). Admin-Navigation hat neu „Konten“.
+  - `/admin/konten`: Promoter und Guides getrennt, je ein Anlege-Formular (Name, E-Mail, Passwort ≥ 12).
+  - `/admin/konten/[id]`: aktivieren/deaktivieren, Name ändern, Passwort setzen. Eigenes Operator-Konto und ungültige ID → 404.
+  - `src/lib/admin/accounts.ts`: reine Eingabeprüfung und GoTrue-Fehlertexte.
+  - `src/lib/admin/account-queries.ts`: Listen/Detail über den RLS-Client.
+  - `src/lib/supabase/admin.ts`: `createAuthAdminClient()`. Gibt nur `auth.admin` heraus und ist die einzige Nutzung von `service_role` in der App.
+- **Tests:**
+  - `tests/guide-role.test.ts` (neu, 19):
+    - Enum, Seed, `is_selling_profile()`
+    - Guide verkauft (Snapshots, Audit `guide`, Kontingent zählt beide Rollen)
+    - deaktivierter Guide/Gabo/anon verkaufen nicht
+    - jede Rolle nur Eigenes: Buchungen, Audit, Sichten 0011, Profile, Zahlungsstatus fremder Buchung
+    - Konto-Pflege: Gabo legt Promoter/Guide an, keinen Operator; Rolle unveränderlich; eigenes Profil gesperrt; Promoter/Guide/deaktiviert/anon dürfen nichts; kein DELETE
+  - `tests/accounts-input.test.ts` (neu, 7)
+  - `access-guard` +4 (Guide in `/promoter`, nicht in `/admin`, deaktiviert → `/gesperrt`, unbekannte Rolle nirgends)
+  - `auth-login` +1 (Guide-Login)
+  - `events-rules-rls` +1 (profiles-Grants)
+  - `app-access` +2: Guide kommt in `/promoter` und `/promoter/dashboard`; `/admin`, `/admin/konten`, `/admin/termine/neu`, `/admin/regeln`, `/admin/vorlagen` → `/kein-zugang`; Konto-Seiten für Operator, Promoter → `/kein-zugang`
+  - `bookings-rls`, `profiles-rls`: auf die eigenen Test-/Seed-Zeilen eingegrenzt, statt Marcos Browser-Verkauf zu löschen. Der in Teil 1 rote Test ist grün.
+- **Verifikation:**
+  - `tsc --noEmit` 0, `eslint src tests` 0
+  - **`npm test` 269/269 in 20 Dateien**, nichts übersprungen; `overbooking` (8 parallel → 1/7), `reserve-function-unchanged` und `promoter-sale` (UPDATE-Identität, 8 parallel → 1/7) grün
+  - Round-Trip Konten durch die echten Server Actions (ohne JS, Skript außerhalb des Repos), 20 Prüfungen:
+    - Fehlertexte (Passwort zu kurz, E-Mail ungültig/vorhanden, manipulierte Rolle `network_operator`)
+    - Guide angelegt → Detailseite → Liste
+    - neuer Guide loggt ein, `/promoter` 200, `/admin/konten` → `/kein-zugang`
+    - Name geändert
+    - Passwort gesetzt: altes gilt nicht mehr, neues schon
+    - deaktiviert → laufende Session `/gesperrt`, reaktiviert → 200
+    - manipulierte ID auf das Operator-Konto wirkungslos
+    - Promoter-/Guide-POST an „anlegen“ → `/kein-zugang`, kein Konto
+  - Round-Trip Guide-Verkauf, 8 Prüfungen:
+    - 2 P. Anzahlung „Barca Samba“ → Angebot → Bestätigen → Detailseite
+    - doppeltes Absenden = dieselbe Buchung
+    - Promoter sieht sie nicht (404)
+    - Guide-Dashboard zeigt 149,80 €, Promoter-Dashboard nicht
+    - DB: Audit `guide:sold`, Snapshots
+  - Testdaten danach entfernt (Buchung, Zähler, RT-Konto). DB: 4 Seed-Profile, nur Marcos Verkauf.
+- **Zeilenenden:** Fünf Testdateien hatten beim Bearbeiten CRLF bekommen. Sie sind auf LF zurückgesetzt (wie HEAD), der Diff zeigt nur echte Änderungen.
+
+**Commit steht aus — wartet auf Marcos Bestätigung** (Hard Rule 3).
+
+Warum: Marcos Auftrag 03.10.2026 („Mach jetzt TEIL 2 … Nur die Rolle + Verkaufen + Anlegen … Stopp vor Teil 3“). Hard Rules 1, 3, 4, 5, 8, 9.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — Teil 2 bestätigt und committet**
+
+Was: Marco hat Teil 2 bestätigt („Guide verkauft + eigenes Dashboard, kommt NICHT in /admin, Gabo legt Guide-Profile getrennt an“). Vor dem Commit `npm test` erneut 269/269 in 20 Dateien grün. Committet gezielt per Pfad, je mit `git diff` vorher:
+- `ae17025` — Migrationen 0012/0013 + Seed
+- `543c509` — App (Zugang, Kopfzeilen, `/admin/konten`, `service_role` nur `auth.admin`)
+- `b9174dc` — Tests
+- Doku-Commit danach (dieser Eintrag, TASKS Teil 2 + E4.1/E4.2 abgehakt, RISKS Nr. 9 → 🟢, PROGRESS)
+
+Danach `git push origin main`.
+
+Warum: Hard Rule 3 (Commit erst nach Marcos Bestätigung), Marcos Auftrag („Committe Teil 2 gezielt per Pfad … Danach git push origin main“).
+
+Agent: Claude.

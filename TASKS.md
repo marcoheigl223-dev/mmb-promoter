@@ -67,8 +67,8 @@ Erste Skizze E1–E8 vom 16.09. früh ist durch die Fassung unten ersetzt (gleic
 
 ### E4 — Admin: Promoter-Accounts
 
-- [ ] **E4.1 — Anlegen, Deaktivieren, Passwort zurücksetzen** (Mindestlänge 12, ein Account pro Person) *(RISKS Nr. 9)*
-- [ ] **E4.2 — Test:** deaktivierter Promoter kann nicht verkaufen.
+- [x] **E4.1 — Anlegen, Deaktivieren, Passwort zurücksetzen** (Mindestlänge 12, ein Account pro Person) *(RISKS Nr. 9)* — erledigt mit Teil 2 (`/admin/konten`, Promoter und Guides), committet 03.10.2026 `543c509`
+- [x] **E4.2 — Test:** deaktivierter Promoter kann nicht verkaufen. — `tests/promoter-sale.test.ts` + `tests/guide-role.test.ts` (deaktivierter Promoter/Guide → `NOT_ALLOWED`), committet 03.10.2026 `b9174dc`
 
 ### E5 — Promoter: Verkaufen gegen Kontingent · *vorher F11 + F12 entscheiden*
 
@@ -96,8 +96,22 @@ Erste Skizze E1–E8 vom 16.09. früh ist durch die Fassung unten ersetzt (gleic
   **03.10.2026 (Teil 1 nach der Diagnose, Auftrag Marco):** gebaut als eigene Route `/promoter/dashboard` („Mein Dashboard“, Link in der Kopfzeile; `/promoter` bleibt Verkaufs-Startseite) — Kennzahlen heute/gesamt aus `sales_by_promoter` (Filter eigene `promoter_id`), 14-Tage-Balken aus `sales_by_day`, alle eigenen Verkäufe. **Verifiziert:** `tsc` 0, `eslint` 0, `promoter-dashboard` 7/7, `app-access` +1, echte Zahlen HTML = DB 17/17; `npm test` 234/235 (rot nur `bookings-rls` wegen Marcos Browser-Verkauf in der lokalen DB, s. CHANGELOG). **Commit steht aus — wartet auf Marcos Bestätigung.** Offen für Teil 2: Tages-Sicht pro Promoter (Guide, Diagnose R2).
 - **03.10.2026 — Nach der Diagnose E5.5 (Marco): fünf Teile nacheinander, Stopp nach jedem** (DECISIONS 03.10.). Teil 1 = Dashboard erreichbar (Zeile E5.5b oben). Teil 2 = Guide-Rolle · vorher F29/F30. Teil 3–5 (Status-Fluss neu, Ticket-Mail als Queue, Gast-Bestätigung/kassiert/final) — Reihenfolge vor Teil 3 mit Marco bestätigen; vorher F26–F28, F32, F33.
   - [x] **Teil 1 — Dashboard erreichbar** (= E5.5b) — von Marco bestätigt 03.10.2026 („Dashboard verlinkt, Zahlen passen“), committet `49d2f9c`
-  - [ ] **Teil 2 — Guide als dritte Rolle** (Gabo legt Promoter- und Guide-Profile an, Rechte pro Event; Tages-Sicht pro Promoter)
-  - [ ] **Teil 3–5** — nach Bestätigung der Reihenfolge
+  - [x] **Teil 2 — Guide als dritte Rolle** (Gabo legt Promoter- und Guide-Profile an, Rechte pro Event; Tages-Sicht pro Promoter)
+    **03.10.2026 (Auftrag Marco: „Nur die Rolle + Verkaufen + Anlegen“):** Migrationen `0012_user_role_guide.sql` + `0013_guide_role_accounts.sql`. Inhalt:
+    - Guide verkauft wie ein Promoter; UPDATE wörtlich (Hard Rule 4).
+    - Lücke in `set_booking_payment_status()` geschlossen.
+    - `profiles`-Pflege nur für `network_operator`.
+    - `/admin/konten` mit Promoter und Guides getrennt: anlegen, aktivieren/deaktivieren, Name, Passwort.
+    - Test-Guide im Seed.
+    Rechte pro Event und „Tages-Sicht“ gehören zu den Guide-Extras (Teil 4, F29/F30). Heute sieht ein Guide nur Eigenes, `sales_by_day` ist damit über RLS exakt.
+    **Verifiziert:** `tsc` 0, `eslint` 0, **`npm test` 269/269 in 20 Dateien** (8-parallel grün), Round-Trips Konten 20 und Guide-Verkauf 8.
+    **Commit steht aus — wartet auf Marcos Bestätigung.** Deckt E4.1/E4.2 ab (Zeilen oben bleiben bis zum Commit offen).
+    **Von Marco bestätigt 03.10.2026** („Guide verkauft + eigenes Dashboard, kommt NICHT in /admin, Gabo legt Guide-Profile getrennt an“), committet `ae17025` (Migrationen + Seed), `543c509` (App), `b9174dc` (Tests), Doku-Commit danach; E4.1/E4.2 abgehakt.
+  - [ ] ~~**Teil 3–5** — nach Bestätigung der Reihenfolge~~ — ersetzt durch Marcos Reihenfolge vom 03.10.2026 (DECISIONS 03.10. „Teil 2“, Punkt 5):
+  - [ ] **Teil 3 — Gabos Auswertungs-Dashboard** (= E5.5c): Gesamteinnahmen, Buchungen/Tickets/Abschlüsse, Umsatz pro Event, pro Promoter **und** pro Guide (verkauft, Provision aus Snapshot, was Gabo an wen abgibt → F25), offene Restbeträge, Diagramm + Tabelle, Summen gegen Einzelverkäufe getestet
+  - [ ] **Teil 4 — Guide-Extras:** Tagesbestellungen, Abkassier-Übersicht (wo/bei wem/wie viel), eigene Provision · vorher F29/F30/F31/F33
+  - [ ] **Teil 5 — Status-Fluss neu:** Bestellung → Mail → bestätigt → kassiert → final, ab final kein Promoter-Edit · vorher F26/F27/F28
+  - [ ] **Teil 6 — E-Mail-Logik:** Ticket-Mail als `pending` in `notifications`, kein Versand · vorher F32
 - [ ] **E5.5c — Admin-Auswertung (Gabo):** Umsatz, kassiert, offen, Provision gesamt und pro Promoter (Diagramm + Tabelle), Umsatz und offene Restbeträge pro Event, alle Abschlüsse; Abrechnungs-Spalte „abzuführen“ erst nach F25.
 - [ ] **E5.5d — Doku-Abschluss E5.5** (Browser-Test-Anleitung, RISKS Nr. 21 → 🟢 wenn belegt).
 
