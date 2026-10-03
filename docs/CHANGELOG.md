@@ -389,3 +389,136 @@ Was: Vor dem Commit `npm test` erneut **180/180 in 14 Dateien** (Dev-Server lief
 Warum: Marcos Auftrag 03.10.2026 („Falls E5.3 noch nicht committet ist: git diff zeigen, dann gezielt per Pfad committen (Migration/Storage + Admin-UI + Tests + docs einzeln)“). Hard Rules 2, 3.
 
 Agent: Claude.
+
+---
+
+**03.10.2026 — E5.4 Promoter-Verkauf (Verkaufs-Kern): Migrationen 0009 + 0010, Promoter-Portal, Tests**
+
+Was:
+- **Migration `0009_payment_status_not_collected.sql`:** dritter Wert `not_collected` („noch nichts kassiert“) im Enum `payment_status` (allein, weil ein neuer Enum-Wert erst nach dem Commit benutzbar ist).
+- **Migration `0010_promoter_sale_functions.sql`:** Enum `deposit_basis`; `bookings.deposit_basis` und `deposit_total_cents`; `customer_email` nullable (F8). Checks: `payment_status_matches_amounts` dreistufig (ersetzt die Fassung aus 0006), `promoter_deposit_terms_consistent`, `promoter_customer_phone_present`, `snapshot_amounts_consistent`. Funktionen `promoter_sale_amounts()` (nur intern), `quote_promoter_sale()`, `reserve_promoter_seats()` (Option B, UPDATE-Block wörtlich aus der Handover-Datei, `confirmed`, Snapshots, Audit `sold`, Idempotenz, `QUOTE_CHANGED`) und `set_booking_payment_status()` (3 Stufen, Audit `payment_status_set`). Handover-Funktion aus 0002 unberührt.
+- **App:** `src/lib/promoter/` (Typen, Fehlertexte, Formular-Parsing, Abfragen); `src/app/promoter/actions.ts` (`saleAction` quote/edit/confirm, `setPaymentStatusAction`, je mit `requireArea("promoter")`, RPC nur über den RLS-Client). `/promoter` zeigt jetzt Events + eigene Verkäufe statt Platzhalter; neu sind `/promoter/verkaufen/[id]` (Formular + Bestätigungsschritt) und `/promoter/verkaeufe/[id]` (Detail, Status, Verlauf). `layout.tsx`: Seitenrand `px-4 sm:px-6` fürs Handy.
+- **Tests:** neu `tests/promoter-sale.test.ts` (24) und `tests/promoter-sale-form.test.ts` (6). `tests/bookings-rls.test.ts` an 0010 angepasst: E-Mail optional, dritte Stufe, neue Checks; die Zeilen erfüllen die Anzahlungs-Checks. `tests/app-access.test.ts` +1 (Promoter-Start + Verkaufsseite).
+- **Zwei Korrekturen beim Round-Trip:**
+  1. Das Status-Formular nutzte `useActionState(action.bind(null, id))`. Der POST ohne JavaScript hing (Headers-Timeout, keine DB-Aktivität). Jetzt läuft es mit einem versteckten Feld `booking_id` wie die Admin-Formulare.
+  2. „Nur noch 1 Plätze frei.“ heißt jetzt „Nur noch 1 Platz frei.“.
+
+Verifikation:
+- **Basis:**
+  - 0009/0010 per `docker exec … psql` eingespielt, Historie-Zeilen nachgetragen.
+  - `tsc --noEmit` 0 Fehler, `eslint src tests` 0 Fehler.
+  - **`npm test` 211/211 in 16 Dateien** (Dev-Server lief, nichts übersprungen).
+- **Überbuchung (Hard Rule 4)**, alle grün:
+  - `promoter-sale`: 8 parallele Verkäufe auf 1 Platz → genau 1 Erfolg, 7× `SOLD_OUT`, plus Identität des UPDATE-Blocks.
+  - `overbooking` 7/7.
+  - `reserve-function-unchanged` 4/4.
+- **Round-Trip durch die echten Server Actions** (Scratch-Skript, Multipart-POST ohne JS, 37 Prüfungen grün):
+  - Test-Event mit Kontingent 15 und Preis 50 €.
+  - Fehlerfälle: Handy, Name, F16, 16 Personen bei 15 frei.
+  - Angebot 3 Personen Anzahlung: 150 € gesamt, 90 € jetzt, 60 € Rest, Provision 30 €. Danach noch keine Buchung; „Ändern“ behält die Felder.
+  - Bestätigen → 303 auf das Detail. In der DB: `confirmed`, `deposit_received`, Snapshots gefüllt, E-Mail NULL, 3 Sitze.
+  - Zweites Absenden → dieselbe Buchung.
+  - Status: voll bezahlt → noch nichts kassiert → Anzahlung erhalten, Audit 1 + 3 Zeilen.
+  - 11 Personen Vollzahler (Regel 10/1): 1 gratis, `fully_paid`.
+  - „Nur noch 1 Platz frei.“
+  - Preis zwischen Angebot und Bestätigung geändert → Hinweis + neues Angebot, nichts gebucht; danach bestätigt → 15/15.
+  - Ausverkauft: kein Formular, POST bucht nicht.
+  - Operator → `/kein-zugang`.
+  - Testdaten danach entfernt (0 Buchungen, 0 Audit-Zeilen, 2 Termine, 1 `pricing_rules`-Zeile).
+- **Nicht geprüft:** Browsertest mit JavaScript durch Claude, weil die Chrome-Erweiterung nicht verbunden war. Der Handy-Test durch Marco steht aus (Anleitung in `PROGRESS.md`).
+
+**Commit steht aus.** Er wartet auf Marcos Bestätigung (Hard Rule 3).
+
+Warum: Marcos Auftrag 03.10.2026 („Dann E5.4 — das Herzstück: der Promoter-Verkauf … Baue NUR den Verkaufs-Kern (E5.4), noch nicht das volle Dashboard (E5.5) und keine Nachrichten (E5.6). Zeig mir git diff + wie ich es als Promoter am Handy-Format teste … Committe erst nach meiner Bestätigung. Danach Stopp.“). Antworten F8/F16/F18/F22/F24 → `docs/DECISIONS.md` 03.10. Hard Rules 1, 4, 7, 8.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — E5.4 Nachbesserung: Live-Übersicht der Beträge im Verkaufsformular, Kundendaten bei jedem Verkauf ausdrücklich Pflicht, Test-Preis lokal**
+
+Was:
+- **Test-Preis (nur lokale DB, nicht im Repo):** an beiden Test-Events („Party Bus – Megapark Funbus“, „Barca Samba Disco-Boot“) je eine Termin-Ausnahme in `pricing_rules`: Ticketpreis 74,90 € und Anzahlung 30,00 €/Person (4 Zeilen per `psql`). Geprüft mit `effective_price_cents()` → 7490 / 3000.
+- **Live-Übersicht** in `/promoter/verkaufen/[id]` (`sale-form.tsx`): Sobald Personen, Zahlart oder Anzahlungsart geändert werden, rechnet die DB nach 250 ms neu. Angezeigt werden:
+  - Personen, davon gratis nach Gruppenregel
+  - Ticketpreis
+  - **Gesamtpreis** (bezahlte Plätze × Preis)
+  - **Anzahlung jetzt** bzw. bei Vollzahler „Jetzt kassieren (Vollzahlung)“ = Gesamt
+  - **Restbetrag im Bus** (bei Vollzahler 0)
+  - Provision
+  - Warnung, wenn mehr Personen als frei
+
+  Die Personenzahl hat −/+-Tasten. Der Button heißt jetzt „Weiter zur Bestätigung“ statt „Beträge prüfen“. Der Bestätigungsschritt ist unverändert.
+- **Neue Server Action `previewSaleAction()`** (`src/app/promoter/actions.ts`):
+  - `requireArea("promoter")`, nimmt nur die Betragsfelder an (keine Kundendaten) und ruft `quote_promoter_sale()` über den RLS-Client.
+  - Schreibt nichts.
+  - Ist der freie Anzahlungsbetrag leer, ungültig oder ≥ Gesamt, zeigt sie trotzdem Gesamtpreis und Gratisplätze. Die Anzahlung bleibt „—“, dazu kommt der Hinweis.
+- **`src/lib/promoter/sale.ts`:** `parseSaleAmountFields()` (nur Betragsfelder) ist herausgelöst. `parseSaleFields()` nutzt es und prüft danach Name + Handy — für **jede** Zahlart. Neu ist außerdem `SALE_AMOUNT_FIELDS`. Neue Typen `SaleAmountValues` und `SalePreview`.
+- **Kundendaten im Formular:**
+  - Überschrift „Kundendaten“ mit dem Satz „Name und Handynummer sind bei jedem Verkauf Pflicht — auch bei Vollzahlern.“
+  - Pflichtfelder sind mit „*“ markiert, E-Mail mit „(optional)“.
+- **Tests:**
+  - `promoter-sale.test.ts` +1: Vollzahler ohne Name/Handy → `CUSTOMER_NAME_REQUIRED`/`CUSTOMER_PHONE_REQUIRED`, nichts gebucht; mit Daten → `fully_paid`.
+  - `promoter-sale-form.test.ts` +4: Vollzahler ohne Kunde abgelehnt; `parseSaleAmountFields` ohne Kundendaten mit denselben Grenzen.
+
+Befund zu Punkt 2 („bei Vollzahler werden keine Kundendaten verlangt“): Im Code waren Name + Handy schon für beide Zahlarten Pflicht — an drei Stellen:
+- HTML-`required`
+- `parseSaleFields()`
+- DB-Check `promoter_customer_phone_present` bzw. `CUSTOMER_*_REQUIRED` in `reserve_promoter_seats()`
+
+Nachgestellt ohne JS ließ sich der Fehler nicht reproduzieren. Die Änderung macht die Pflicht im Formular sichtbar und sichert sie mit Regressionstests ab.
+
+Verifikation:
+- **Basis:**
+  - `tsc --noEmit` 0, `eslint src tests` 0.
+  - **`npm test` 216/216 in 16 Dateien** (Dev-Server lief, nichts übersprungen). Grün sind auch: `promoter-sale` 8 parallel → 1/7 mit UPDATE-Block-Identität, `overbooking` und `reserve-function-unchanged`.
+- **Live-Übersicht über HTTP** (Scratch-Skript, Aufruf von `previewSaleAction` wie der Browser mit `Next-Action`-Header, 25 Prüfungen grün). Regel 10/1, Preis 74,90 €, Anzahlung 30 €:
+
+  | Fall | Gesamt | jetzt | Rest |
+  |---|---|---|---|
+  | 1 Person Anzahlung | 74,90 | 30,00 | 44,90 |
+  | 3 Personen Anzahlung | 224,70 | 90,00 | 134,70 |
+  | 3 Personen Vollzahler | 224,70 | 224,70 | 0 |
+  | 10 Personen zahlende Köpfe (1 gratis) | 674,10 | 270,00 | 404,10 |
+  | 10 Personen alle Köpfe | 674,10 | 300,00 | 374,10 |
+  | 11 Personen | 749,00 | 300,00 | 449,00 |
+  | 20 Personen Vollzahler (2 gratis) | 1.348,20 | 1.348,20 | 0 |
+  | freier Betrag 100 € | 224,70 | 100,00 | 124,70 |
+
+  Weitere Fälle:
+  - Freier Betrag leer / = Gesamt → Gesamt sichtbar, Anzahlung offen + Hinweis (F16).
+  - 0 Personen → Meldung.
+  - 31 Personen → Angebot mit 30 frei (UI warnt).
+  - Operator → kein Angebot.
+  - Keine Buchung entstanden.
+- **Ohne JS:** Vollzahler ohne Name → „Bitte den Namen des Kunden eingeben.“, ohne Handy → Handynummer-Meldung, mit Daten → Bestätigung „2 × 74,90 € = 149,80 €“.
+- DB danach: 0 Buchungen, 0 Audit-Zeilen, Zähler 0. Die Test-Preise bleiben stehen (gewollt).
+- **Nicht geprüft:** das Verhalten mit JavaScript im Browser (Chrome-Erweiterung nicht verbunden). Der Handy-Test durch Marco steht aus (`PROGRESS.md`).
+
+**Commit steht aus.** Er wird zusammen mit E5.4 nach Marcos Bestätigung gemacht (Hard Rule 3).
+
+Warum: Marcos Auftrag 03.10.2026 („Zwei Korrekturen am Verkauf (E5.4) + ein Test-Preis … BETRÄGE VORRECHNEN + ÜBERSICHTLICH … Aktualisiert sich automatisch bei jeder Änderung … VOLLZAHLER BRAUCHT AUCH KONTAKTDATEN … Name + Handynummer müssen IMMER Pflicht sein (E-Mail optional) … Nur Testdaten/lokal, nicht committen“). Hard Rules 3, 8, 9.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — E5.4 committet (nach Marcos Browser-Bestätigung)**
+
+Was:
+- **Marcos Bestätigung 03.10.2026 im Browser:** Die Beträge rechnen live. Kontaktdaten werden auch bei Vollzahlern verlangt. Der Platz zieht vom Kontingent ab.
+- **Vor dem Commit erneut geprüft:**
+  - `next typegen` + `tsc --noEmit` 0, `eslint src tests` 0.
+  - **`npm test` 216/216 in 16 Dateien** (Dev-Server lief, nichts übersprungen; `promoter-sale` 8 parallel → 1/7, `overbooking`, `reserve-function-unchanged` grün).
+  - Secret-Scan aller geänderten/neuen Dateien (JWT, Stripe, Service-Key, privater Schlüssel, Webhook-Secret) ohne Treffer; `.env.local` und `supabase/.env.local` per `git check-ignore` ignoriert.
+  - Migrationsdateien 0009/0010 byteidentisch mit den eingespielten Historie-Zeilen (md5 der Datei = md5 von `statements`).
+- **Gezielt per Pfad committet**, `git diff` je Schritt:
+  - `d08f8e1` E5.4a Migrationen 0009 + 0010 (Verkaufs-Logik)
+  - `60ca6ab` E5.4b Promoter-Portal + `src/lib/promoter/` (UI)
+  - `abe39c0` E5.4c Tests
+  - dieser Doku-Stand als eigener Commit
+- Lokale DB nach Marcos Test: 0 Buchungen, 0 Audit-Zeilen, Zähler 0 (von Marco aufgeräumt).
+
+Warum: Marcos Auftrag 03.10.2026 („Der Verkauf ist von mir im Browser bestätigt … Committe E5.4 in sinnvollen Schritten gezielt per Pfad (Verkaufs-Logik / UI / Tests / docs), git diff vor jedem. Danach git push origin main“). Hard Rules 2, 3, 8, 9.
+
+Agent: Claude.

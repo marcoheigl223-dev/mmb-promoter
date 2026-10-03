@@ -4,6 +4,54 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**03.10.2026 — E5.4 Nachbesserung: Live-Übersicht der Beträge rechnet die DB (Server Action), Name + Handynummer bei jedem Verkauf Pflicht**
+
+Entscheidung (Marco, 03.10.2026): Das Verkaufsformular zeigt die Beträge sofort und aktualisiert sie bei jeder Änderung. Angezeigt werden:
+- Gesamtpreis (Gratisplätze nach Gruppenregel abgezogen)
+- Anzahlung jetzt
+- Restbetrag im Bus
+- bei Vollzahler: Anzahlung = Gesamt, Rest 0
+
+Name + Handynummer sind **immer** Pflicht, egal ob Anzahlung oder Vollzahler; E-Mail optional (bestätigt F8).
+
+Ausgestaltung (Claude):
+
+1. **Weiterhin eine Rechenstelle:** Die Live-Übersicht ruft über die Server Action `previewSaleAction()` dieselbe DB-Funktion `quote_promoter_sale()` auf wie Bestätigungsschritt und Buchung (DECISIONS 03.10. E5.4, Punkt c). Der Browser rechnet keine Beträge — kein zweiter Rechenweg, der von der DB abweichen könnte.
+2. **Die Vorschau bekommt keine Kundendaten** (nur Event, Personen, Zahlart, Anzahlungsart, freier Betrag) und schreibt nichts. Aufruf 250 ms nach der letzten Änderung; veraltete Antworten werden verworfen.
+3. **Ohne JavaScript bleibt der bisherige Weg:** Die Übersicht bleibt leer, die Beträge erscheinen im Bestätigungsschritt. Der Button heißt deshalb „Weiter zur Bestätigung“.
+4. **Freier Anzahlungsbetrag noch leer oder ≥ Gesamt:** Gesamtpreis und Gratisplätze werden trotzdem gezeigt, die Anzahlung bleibt offen („—“) mit Hinweis — gebucht werden kann so nicht (F16 unverändert).
+5. **Test-Preise 74,90 € / 30 € stehen nur in der lokalen DB** (Termin-Ausnahmen), nicht in einer Migration — F15 (echter Standard-Ticketpreis) bleibt offen.
+
+Begründung: Marcos Auftrag 03.10.2026 („BETRÄGE VORRECHNEN + ÜBERSICHTLICH … VOLLZAHLER BRAUCHT AUCH KONTAKTDATEN“). Hard Rules 5, 7, 8, 9.
+
+---
+
+**03.10.2026 — E5.4 Promoter-Verkauf: Antworten F8/F16/F18/F22/F24 (Marco) + Ausgestaltung (Migrationen `0009_payment_status_not_collected.sql`, `0010_promoter_sale_functions.sql`)**
+
+Entscheidung (Marco, 03.10.2026 — Antworten auf die vor E5.4 gestellten Fragen, verbindlich):
+
+1. **F24 — Vollzahlung startet als „voll bezahlt“, Anzahlung als „Anzahlung erhalten“.** „Noch nichts kassiert“ entsteht nur durch eine spätere Statusänderung.
+2. **F18 — 10+1 pro vollem Block:** Gratisplätze = ⌊Personen / Schwelle⌋ × Gratisplätze der Regel (bei 11/1: 11 → 1, 21 → 1, 22 → 2).
+3. **F16 — Freier Anzahlungsbetrag ≥ Gesamtpreis wird mit Meldung abgelehnt**, nicht gekappt (dann ist es eine Vollzahlung).
+4. **F22 — Ein Promoter-Verkauf ist sofort `bookings.status = 'confirmed'`.**
+5. **F8 — Kundendaten minimal: Name + Handynummer Pflicht, E-Mail optional.**
+6. Auftrag: **nur der Verkaufs-Kern** — kein volles Dashboard (E5.5), keine Nachrichten (E5.6).
+
+Ausgestaltung (Claude):
+
+a. **Zwei Migrationen:** 0009 enthält nur `alter type payment_status add value 'not_collected'` — Postgres erlaubt einen neuen Enum-Wert erst nach dem COMMIT; Check und Funktionen, die ihn benutzen, stehen in 0010. Der Check `payment_status_matches_amounts` aus 0006 wird in 0010 unter gleichem Namen durch die Drei-Stufen-Fassung ersetzt (Korrektur = neue Migration, 0006 unverändert).
+b. **Option B (F12):** `reserve_promoter_seats()` steht neben der Handover-Funktion; 0002 bleibt byteidentisch. Das atomare UPDATE ist **wörtlich** übernommen (eigener Identitätstest + eigener 8-parallel-Test, Hard Rule 4). Sitze = alle Personen; Preis/Provision = bezahlte Plätze (RISKS Nr. 22).
+c. **Eine Rechenstelle:** `promoter_sale_amounts()` (nur intern ausführbar) rechnet Gratisplätze, Gesamt, Anzahlung, Provision, Startstatus; `quote_promoter_sale()` (Angebot, schreibt nichts) und `reserve_promoter_seats()` rufen beide sie auf. Die App rechnet keine Beträge.
+d. **Anzahlung pro Buchung:** `deposit_basis` (`paying_persons` Standard / `all_persons` / `custom_total`) + `deposit_total_cents` = vereinbarte Anzahlung. Sie bleibt stehen, wenn der Status wechselt, damit „Anzahlung erhalten“ wieder genau diesen Betrag setzt. Checks: Anzahlung ⇒ Basis + 0 < Betrag < Gesamt; Vollzahlung ⇒ keine Anzahlungsangaben; `deposit_received` ⇒ kassiert = vereinbarte Anzahlung.
+e. **Angebot → Bestätigung mit Schutz gegen Doppelklick und Regeländerung:** Beim Angebot erzeugt der Server einen Idempotenz-Schlüssel und gibt die angezeigten Beträge als versteckte Felder mit. `reserve_promoter_seats()` liefert bei gleichem Schlüssel die bestehende Buchung (auch 8× parallel) und bricht mit `QUOTE_CHANGED` ab, wenn Gesamt oder kassierter Betrag nicht mehr der Anzeige entsprechen — die App zeigt dann das neue Angebot, gebucht wird nichts.
+f. **Zahlungsstatus ändern:** `set_booking_payment_status()` — Promoter nur eigene, `network_operator` alle Promoter-Buchungen; nicht bei Storno oder Online-Buchungen; „Anzahlung erhalten“ nur bei Zahlart Anzahlung; jede Änderung eine Audit-Zeile `payment_status_set` mit Vorher/Nachher und Rolle; gleicher Status = keine Zeile.
+g. **Routen:** `/promoter` (Events inkl. interner mit frei/Kontingent, eigene Verkäufe), `/promoter/verkaufen/[id]` (Eingabe → Bestätigungsschritt), `/promoter/verkaeufe/[id]` (Beträge, Status, Verlauf). Handy zuerst (volle Breite, große Tipp-Flächen, Layout-Rand `px-4` statt `px-6` auf schmalen Bildschirmen). Formulare funktionieren auch ohne JavaScript — deshalb überträgt das Status-Formular die Buchungs-ID als verstecktes Feld statt über `action.bind()` (gebundene Action hing beim POST ohne JS).
+h. **Nicht in E5.4:** Storno-Funktion und `enqueue_booking_notifications()` (eigener TASKS-Schritt), Provision beim Storno (F10), Standard-Ticketpreis (F15).
+
+Begründung: Marcos Nachricht 03.10.2026 („Dann E5.4 — das Herzstück: der Promoter-Verkauf … Baue NUR den Verkaufs-Kern (E5.4) … Committe erst nach meiner Bestätigung. Danach Stopp.“) und seine Antworten auf F8/F16/F18/F22/F24. Hard Rules 1, 4, 5, 7, 8.
+
+---
+
 **02.10.2026 — F22/F23: Zahlungsstatus in drei Stufen, neuer Promoter-Verkauf startet mit „Anzahlung erhalten"; F11/F18: Anzahlungsbasis bei 10+1 = Standard „nur zahlende Köpfe", pro Verkauf umstellbar; E5.3 = Event-Bilder (Migration `0008_event_images.sql`), Funktionen → E5.4 / 0009**
 
 Entscheidung (Marco, 02.10.2026 — Antworten auf die vor E5.3 gestellten Fragen, verbindlich):
