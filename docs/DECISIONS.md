@@ -4,6 +4,54 @@ Format: Datum · Entscheidung · Begründung. **Neue Einträge oben anhängen**,
 
 ---
 
+**03.10.2026 — Nach der Diagnose E5.5 (Marco): neuer Status-Fluss ersetzt den alten, Guide als dritte Rolle, E-Mail nur als Queue-Logik; fünf Teile nacheinander, Teil 1 = Dashboard erreichbar**
+
+Entscheidung (Marco, 03.10.2026 — nach Lesen von `docs/DIAGNOSE_E5-5_ROLLEN.md`, verbindlich):
+
+1. **Status-Fluss NEU, ersetzt den alten.** Ein Verkauf startet **nicht mehr** sofort mit „Anzahlung erhalten“. Neuer Ablauf:
+   Bestellung angelegt → Ticket-Mail an den Gast (Logik) → Gast hat den Erhalt bestätigt → kassiert → final.
+   **Ab „final/kassiert“ kann der Promoter nichts mehr ändern** — nur noch Guide oder Gabo.
+   Damit überholt: der Startstatus aus DECISIONS 02.10. (F22/F23, Punkt 2: „startet direkt mit Anzahlung erhalten“) und DECISIONS 03.10. E5.4 Punkt 1 (F24: Vollzahlung startet `fully_paid`, Anzahlung `deposit_received`). Diese Einträge bleiben als Historie stehen; umgesetzt ist bis zum Umbau weiter der alte Fluss (Migration 0010).
+2. **Guide ist eine dritte Rolle.** Er kann alles, was ein Promoter kann (Tickets verkaufen), **plus** Guide-Extras (aus der Diagnose: alle Tagesbestellungen sehen, Abkassier-Übersicht, eigene Provision). **Gabo legt Promoter- und Guide-Profile an** und **stellt pro Event ein, was der Guide darf**.
+3. **E-Mail jetzt nur als Logik:** Die Ticket-Mail wird als „ausstehend“ (`notifications.status = 'pending'`) in die Queue gelegt. **Echter Versand und DSGVO kommen beim Live-Setup** (F7, F20, F21, RISKS Nr. 16).
+4. **Vorgehen:** fünf Teile, einer nach dem anderen, keine parallelen Subagenten, `git diff` vor jedem Commit, Stopp nach jedem Teil. **Teil 1 = Dashboard-Link**, **Teil 2 = Guide-Rolle**. Teil 3–5 hat Marco in diesem Auftrag nicht einzeln benannt — vermutlich Status-Fluss, E-Mail-Queue, Profil-/Guide-Verwaltung; die Reihenfolge wird vor Teil 3 bestätigt, nicht geraten.
+
+Ausgestaltung Teil 1 (Claude):
+
+a. **Die Dashboard-Seite existierte noch nicht.** E5.5a hatte nur die Sichten gebaut (Diagnose Abschnitt 1). Teil 1 baut deshalb die Seite E5.5b in schlichter Form und verlinkt sie: neue Route `/promoter/dashboard` („Mein Dashboard“), im Promoter-Kopf eine Navigation „Events“ (`/promoter`) · „Mein Dashboard“. `/promoter` bleibt die Startseite nach dem Login (Verkaufen zuerst).
+b. **Echte Zahlen, keine Konstanten:** Kennzahlen kommen aus `sales_by_promoter`, das Diagramm aus `sales_by_day`, die Liste aus `bookings` — alles DB-Sichten aus 0011 über den RLS-Client. Die App summiert keine Beträge (DECISIONS 03.10. E5.5, Punkt 2).
+c. **Schon jetzt ausdrücklich „nur eigene“ (Diagnose R2):** Kennzahlen und Verkaufsliste filtern zusätzlich auf `promoter_id = <eigene ID>`, nicht nur über RLS. So bleiben „meine Provision“ und „mein Umsatz“ richtig, wenn ein Guide später fremde Tagesbestellungen sehen darf. `sales_by_day` hat keine Promoter-Spalte; für die heutige Promoter-Rolle ist es durch RLS exakt. Bekommt der Guide eine breitere Lese-Policy, braucht das Diagramm eine Tages-Sicht pro Promoter — Aufgabe von Teil 2, dort mit Test.
+d. **Diagramm:** serverseitiges SVG ohne Bibliothek, die letzten 14 Verkaufstage (Ortszeit Mallorca), Tage ohne Verkauf als 0 (der Kommentar der Sicht sagt, die App füllt sie auf). Balken = Abschlüsse, darunter der Umsatz je Tag als Text.
+
+Begründung: Marcos Auftrag 03.10.2026 („Status-Fluss NEU ersetzt den alten … Guide ist dritte Rolle … E-Mail: jetzt nur Logik … Starte mit TEIL 1 (Dashboard-Link) … Prüfen dass die echten Zahlen (keine Hardcodes) angezeigt werden“). Hard Rules 1, 3, 5, 8. Offene Detailfragen zu Status-Fluss und Guide → RISKS F26–F33.
+
+---
+
+**03.10.2026 — E5.5 Dashboards: Zerlegung in E5.5a–d, eine Rechenstelle in der DB (Migration `0011_sales_reporting_views.sql`), Begriffs-Definitionen (Vorschlag Claude — von Marco zu bestätigen)**
+
+Auftrag (Marco, 03.10.2026): volles Promoter-Dashboard und Admin-Dashboard für Gabo. Provision immer aus dem Snapshot, Summen gegen Einzelverkäufe getestet, Promoter sieht nur eigene Daten. Design bleibt schlicht, die Optik-Runde kommt nach E5.5. Zerlegen, Stopp zwischen den Teilschritten.
+
+Ausgestaltung (Claude):
+
+1. **Teilschritte:**
+   - E5.5a: Auswertungs-Sichten in der DB + Summen-Tests, keine UI
+   - E5.5b: Promoter-Dashboard `/promoter` (Kennzahlen, leichtes SVG-Diagramm ohne Bibliothek, alle eigenen Verkäufe, Weg zum Verkaufen)
+   - E5.5c: Admin-Auswertung für Gabo (gesamt, pro Promoter, pro Event, offene Restbeträge, Diagramm + Tabelle)
+   - E5.5d: Doku-Abschluss
+2. **Eine Rechenstelle:** Beide Dashboards lesen dieselben vier Sichten (`sales_totals`, `sales_by_day`, `sales_by_promoter`, `sales_by_departure`). Die App summiert keine Beträge — wie beim Verkauf (DECISIONS 03.10. E5.4, Punkt c).
+3. **`security_invoker = true`:** Die Sichten laufen mit den RLS-Policies des Aufrufers. Ein Promoter bekommt dieselbe Sicht wie Gabo, aber nur über seine eigenen Buchungen. Keine zweite Rechte-Logik.
+4. **Begriffe (zur Bestätigung):**
+   - **Umsatz** = Gesamtpreis der nicht stornierten Verkäufe (`total_amount_cents`, zum Verkaufszeitpunkt festgeschrieben). Daneben immer **kassiert** (vom Promoter eingenommen) und **offen** (Rest im Bus).
+   - **Provision** = Summe der Provisions-Snapshots (`commission_total_cents`), nie neu gerechnet.
+   - **Abschlüsse** = Anzahl Verkäufe; **Tickets** = Personen (inkl. Gratisplätze, bezahlt/gratis getrennt ausweisbar).
+   - **Heute / Verkaufstag** = Kalendertag in Ortszeit Mallorca nach `sold_at`.
+   - **Storno** (`cancelled`/`refunded`) zählt nicht in Umsatz, Tickets und Provision. Es wird separat mit Anzahl und Provisions-Snapshot ausgewiesen („Provision ungeklärt“, F10).
+   - **Gabos Sicht** zeigt zusätzlich „Umsatz abzüglich Provision“ — eine reine Differenz, keine Abrechnungsregel (siehe F25).
+
+Begründung: Marcos Auftrag 03.10.2026 („Zahlen müssen stimmen (Geld!)“, „NUR seine eigenen Daten“, „Provisionsbeträge immer aus dem gespeicherten Snapshot“). Hard Rules 5, 7, 8.
+
+---
+
 **03.10.2026 — E5.4 Nachbesserung: Live-Übersicht der Beträge rechnet die DB (Server Action), Name + Handynummer bei jedem Verkauf Pflicht**
 
 Entscheidung (Marco, 03.10.2026): Das Verkaufsformular zeigt die Beträge sofort und aktualisiert sie bei jeder Änderung. Angezeigt werden:

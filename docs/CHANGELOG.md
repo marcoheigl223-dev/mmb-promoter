@@ -522,3 +522,124 @@ Was:
 Warum: Marcos Auftrag 03.10.2026 („Der Verkauf ist von mir im Browser bestätigt … Committe E5.4 in sinnvollen Schritten gezielt per Pfad (Verkaufs-Logik / UI / Tests / docs), git diff vor jedem. Danach git push origin main“). Hard Rules 2, 3, 8, 9.
 
 Agent: Claude.
+
+---
+
+**03.10.2026 — E5.4 gepusht**
+
+Was: `git push origin main` → `b5016c2..b184675`. Geprüft: `HEAD` = `origin/main` = `git ls-remote origin main` = `b184675`, 0/0 Commits auseinander, Arbeitsbaum sauber. Secret-Scan über `origin/main..HEAD` vor dem Push ohne Treffer; die getrackten Vorlagen `.env.local.example` und `supabase/.env.example` haben leere Secret-Werte.
+
+Warum: Marcos Auftrag 03.10.2026 („Danach git push origin main (alles sichern). Bestätige lokal = Remote, keine Secrets.“). Hard Rule 9.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — E5.5a: Auswertungs-Sichten (Migration `0011_sales_reporting_views.sql`) + Summen-Tests**
+
+Was:
+- **E5.5 zerlegt** (Marcos Auftrag „Zerlege E5.5 in Teilschritte … Stopp zwischen den Teilschritten“):
+  - E5.5a: DB-Auswertung (diese Migration + Tests), keine UI
+  - E5.5b: Promoter-Dashboard `/promoter`
+  - E5.5c: Admin-Auswertung für Gabo
+  - E5.5d: Doku-Abschluss
+- **Migration 0011 — vier Sichten**, alle `security_invoker = true`, nur `channel = 'promoter'`:
+  - `sales_totals` — eine Zeile: Abschlüsse, Tickets (bezahlt/gratis), Umsatz, kassiert, offen, Provision; dasselbe für „heute“; Storno-Anzahl + Storno-Provision separat; letzter Verkauf
+  - `sales_by_day` — pro Verkaufstag (Ortszeit Mallorca) → Diagramm
+  - `sales_by_promoter` — pro Promoter (Name, aktiv, gesamt + heute, Storno) → Abrechnung
+  - `sales_by_departure` — pro Event (Kontingent/belegt, Umsatz, kassiert, offener Rest im Bus, Provision)
+- **Beträge nur aus der Buchung:** `total_amount_cents`, `amount_paid_cents`, `amount_due_cents` (generiert), `commission_total_cents` (Snapshot). Keine `effective_*()`-Funktion — eine spätere Regeländerung ändert keine Summe.
+- **Storno** (`cancelled`/`refunded`) zählt nicht in Umsatz/Tickets/Provision, sondern separat (F10 offen, nichts verrechnet).
+- **Rechte:** `revoke all … from public, anon, authenticated`, `grant select … to authenticated, service_role`. Durch `security_invoker` gilt die RLS von `bookings` auch in den Summen: Promoter nur eigene, `network_operator` alles, deaktiviert nichts, anon kein Recht.
+- Eingespielt per `docker exec … psql` (RISKS Nr. 24), Historie-Zeile `0011` nachgetragen; md5 der Datei = md5 von `statements`.
+- **Neue Testdatei `tests/sales-reporting.test.ts` (11 Tests).** Eigener temporärer Promoter (TEST-e55) isoliert die Summen von den parallel laufenden Test-Dateien.
+  - Handrechnung: 2 P. Anzahlung + 3 P. Vollzahler + 1 P. freier Betrag 15 € = 6 Tickets, 240 € Umsatz, 195 € kassiert, 45 € offen, 60 € Provision, dazu eine 12er-Gruppe aus ihren Snapshots.
+  - Jede Summe = Snapshot × bezahlte Plätze aus den Einzelzeilen.
+  - Operator im selben Snapshot (repeatable read): Rohzeilen = `sales_totals` = Σ pro Promoter = Σ pro Event = Σ pro Tag.
+  - Isolation: der andere Promoter sieht auf demselben Event nur seinen 40-€-Verkauf, nie A's Zeile; deaktiviert → 0 und leer; anon → `permission denied`.
+  - Neue Preis-/Provisionsregel nach dem Verkauf → Summen unverändert.
+  - Storno → Umsatz −40 €, Provision −10 €, separat 1 Storno / 10 €.
+  - Verkaufstag Mallorca: 22:00 UTC im Sommer = nächster Tag, 21:59:59 = selber Tag, 23:30 UTC Winterzeit = nächster Tag.
+  - `security_invoker=true` auf allen vier Sichten geprüft.
+- `tests/events-rules-rls.test.ts`: Erwartungsliste der `authenticated`-Rechte um die vier Sichten (je nur SELECT) erweitert.
+- **Verifikation:** `tsc --noEmit` 0, `eslint src tests` 0, **`npm test` 227/227 in 17 Dateien** (Dev-Server lief, nichts übersprungen; `overbooking`, `reserve-function-unchanged`, `promoter-sale` 8 parallel → 1/7 unverändert grün). DB danach: 0 Buchungen, keine TEST-Termine, kein Test-Nutzer.
+
+**Commit steht aus — wartet auf Marcos Bestätigung** (Hard Rule 3).
+
+Warum: Marcos Auftrag 03.10.2026 („Provisionsbeträge immer aus dem gespeicherten Snapshot … Zahlen müssen stimmen (Geld!) — baue dafür Tests, die die Summen gegen die Einzelverkäufe prüfen“, „NUR seine eigenen Daten (RLS …)“). Eine Rechenstelle in der DB für beide Dashboards, damit Promoter- und Gabo-Sicht nie unterschiedlich rechnen. Hard Rules 1, 4, 5, 7, 8.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — Diagnose E5.5: Dashboard, Rollen, Status-Logik, Nachrichten (nur gelesen, nichts gebaut)**
+
+Was:
+- Neue Datei `docs/DIAGNOSE_E5-5_ROLLEN.md` (Momentaufnahme, keine Regel-Datei). Inhalt:
+  - **Dashboard:** E5.5a hat nur die vier Auswertungs-Sichten (0011) gebaut, uncommittet und von keiner Seite gelesen. Die Dashboard-Seite (E5.5b) ist noch nicht gebaut — deshalb zeigt `/promoter` nur Events + letzte Verkäufe.
+  - **Rollen:** zwei Rollen (`network_operator`, `promoter`), Prüfung in App-Guard, RLS und DB-Funktionen. Eine dritte Rolle „guide“ ist machbar (mittlerer Aufwand), berührt aber `reserve_promoter_seats()` (Hard Rule 4). Zwei Fallen: Die `security_invoker`-Sichten würden fremde Buchungen in die „eigene“ Provision rechnen, und `set_booking_payment_status()` gäbe einer neuen Rolle heute Operator-Rechte beim Status.
+  - **Status:** Promoter eigene, Gabo alle, jederzeit in jede Richtung, mit Audit. Kein finaler Zustand, keine Zuordnung, wer welchen Betrag kassiert hat.
+  - **Nachrichten:** Tabelle `notifications` existiert (0006), ist aber leer — kein Auslöser, kein Versand. Vorschlag: AFTER-INSERT-Trigger auf `bookings` (Reserve-Funktion bleibt unberührt), lokal über Mailpit testen.
+  - Reihenfolge, Abhängigkeiten und neue offene Fragen G1–G12 (noch nicht in RISKS übertragen, weil RISKS uncommittete E5.5a-Änderungen enthält).
+- Keine Änderung an Code, Migrationen oder Tests.
+
+Warum: Marcos Auftrag 03.10.2026 („Bevor wir weiterbauen: DIAGNOSE … nur lesen, nichts bauen … Committe nur die Diagnose-Datei.“). Dieser CHANGELOG-Eintrag geht deshalb mit dem nächsten Doku-Commit mit.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — Teil 1 nach der Diagnose E5.5: Promoter-Dashboard `/promoter/dashboard` gebaut und oben verlinkt (= E5.5b); Entscheidungen Marco verankert**
+
+Was:
+- **Doku zuerst:** `docs/DECISIONS.md` (neuer Eintrag oben) hält Marcos Entscheidungen fest:
+  - neuer Status-Fluss ersetzt den alten (Bestellung angelegt → Ticket-Mail → Gast-Erhalt bestätigt → kassiert → final; ab kassiert/final ändert nur Guide/Gabo)
+  - Guide als dritte Rolle
+  - E-Mail vorerst nur als Queue-Logik
+  - fünf Teile nacheinander; Teil 1 = Dashboard erreichbar
+
+  `docs/RISKS.md`: neue offene Fragen F26–F33 (Geld am Strand im neuen Fluss, Gast-Bestätigung, kassiert/final, Guide-Rechte pro Event, Tagesbestellungen, Guide-Provision, Ticket-Inhalt, wer kassiert hat). Bis zum Umbau gilt der Status-Fluss aus 0010 weiter.
+- **Befund:** Marco ging davon aus, dass die Dashboard-Seite schon existiert. Sie war nicht gebaut (Diagnose: nur die Sichten aus 0011 standen). Teil 1 heißt deshalb: Seite schlicht bauen und verlinken.
+- `src/app/promoter/layout.tsx`: Kopfzeile mit Navigation „Events“ (`/promoter`) · „Mein Dashboard“ (`/promoter/dashboard`) · Abmelden. Gleiches Muster wie im Admin-Bereich. `/promoter` bleibt die Startseite (Verkaufen).
+- `src/app/promoter/dashboard/page.tsx` (neu, `requireArea("promoter")`):
+  - Knopf „Zu den Events · Verkaufen“
+  - Kennzahlen **heute** (Abschlüsse, Umsatz, Provision) und **gesamt** (Abschlüsse, Tickets bezahlt/gratis, Umsatz, kassiert, offen, Provision)
+  - Storno-Hinweis separat
+  - SVG-Balken „Abschlüsse der letzten 14 Tage“ (serverseitig, ohne Bibliothek), darunter die Tage mit Verkauf samt Umsatz
+  - **alle** eigenen Verkäufe (Kunde, Event, Personen, Verkaufszeit, Gesamtbetrag, Status, Provisions-Snapshot) mit Link zur Detailseite
+- `src/lib/promoter/queries.ts` (additiv):
+  - `getOwnSalesSummary(id)` aus `sales_by_promoter`
+  - `listOwnSalesDays(from)` aus `sales_by_day`
+  - `listAllOwnBookings(id)`
+
+  Alle mit ausdrücklichem Filter auf die eigene `promoter_id`, wo die Sicht sie hat (Diagnose R2: bleibt richtig, wenn der Guide breitere Leserechte bekommt). `sales_by_day` hat keine Promoter-Spalte und ist heute nur über RLS eingegrenzt → Tages-Sicht pro Promoter samt Test kommt mit Teil 2.
+- `src/lib/promoter/dashboard.ts` (neu, rein): Kalendertag Mallorca, Tage verschieben, 14-Tage-Fenster mit 0 auffüllen. Rechnet keine Beträge.
+- Tests:
+  - `tests/promoter-dashboard.test.ts` (neu, 7): Tagesgrenze Sommer/Winter, Monats-/Jahres-/Umstellungsgrenzen, Auffüllen, Fenster
+  - `tests/app-access.test.ts` +1: Link in der Kopfzeile, Dashboard 200 mit allen Abschnitten, Operator → `/kein-zugang`, ohne Login → `/login`
+- **Echte Zahlen geprüft** (Skript außerhalb des Repos):
+  - 2 Testverkäufe als Promoter über `reserve_promoter_seats()` angelegt (3 P. und 2 P. Anzahlung auf „Barca Samba“, einer auf gestern datiert), zusätzlich zu Marcos Browser-Verkauf
+  - Sicht = Summe der Einzelzeilen (6 Werte)
+  - HTML zeigt exakt die DB-Werte: Umsatz 1.048,60 €, kassiert 824,10 €, offen 224,50 €, Provision 140,00 €, heute 898,80 €/120,00 €, Tickets 15/14 bezahlt, beide Tage im Diagramm
+  - 17/17 OK
+  - Testverkäufe danach entfernt, Zähler zurückgesetzt; Marcos Verkauf unangetastet
+- **Verifikation:**
+  - `tsc --noEmit` 0, `eslint src tests` 0
+  - `npm test` **234/235 in 18 Dateien** — `overbooking`, `reserve-function-unchanged` und `promoter-sale` (8 parallel → 1/7) grün
+  - Der eine rote Test ist `bookings-rls` „Promoter liest Audit-Log … nur seiner eigenen Buchung“. Er erwartet, dass der Test-Promoter sonst keine Buchung hat. In der lokalen DB liegt aber Marcos Browser-Verkauf vom 03.10. (16:28 Ortszeit, Party Bus, 10 P.). Das hat keinen Bezug zu dieser Änderung; der Verkauf wurde nicht ungefragt gelöscht.
+
+**Commit steht aus — wartet auf Marcos Bestätigung** (Hard Rule 3).
+
+Warum: Marcos Auftrag 03.10.2026 („Starte mit TEIL 1 (Dashboard-Link) … Prüfen dass die echten Zahlen (keine Hardcodes) angezeigt werden … Danach Stopp vor TEIL 2“). Eine Rechenstelle in der DB, die App summiert keine Beträge. Hard Rules 1, 3, 5, 7, 8.
+
+Agent: Claude.
+
+---
+
+**03.10.2026 — E5.5a + Teil 1 bestätigt und committet**
+
+Was: Marco hat Teil 1 bestätigt („Dashboard verlinkt, Zahlen passen“). Committet gezielt per Pfad wie in PROGRESS.md vorgeschlagen: `6236fc8` (E5.5a: Migration 0011 + `sales-reporting` + `events-rules-rls`), `49d2f9c` (Teil 1: Dashboard-Seite, Kopfzeile, Queries, `promoter-dashboard`, `app-access`), dazu dieser Doku-Commit. TASKS: E5.5a, E5.5b und Teil 1 abgehakt.
+
+Warum: Hard Rule 3 (Commit erst nach Marcos Bestätigung). Der rote Test `bookings-rls` (Marcos Browser-Verkauf in der lokalen DB) wird in Teil 2 robuster gemacht, statt den Verkauf zu löschen.
+
+Agent: Claude.

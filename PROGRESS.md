@@ -1,22 +1,48 @@
 # PROGRESS.md — Scratchpad (Arbeitsstand der laufenden Aufgabe)
 
-**Stand 03.10.2026: E5.4 (Promoter-Verkauf, Verkaufs-Kern) ist von Marco im Browser bestätigt und COMMITTET. Der Push nach `origin/main` folgt direkt nach dem Doku-Commit. Als Nächstes kommt E5.5 (volles Dashboard Promoter + Gabo), in Teilschritten mit Stopp nach jedem.**
+**Stand 03.10.2026: Marco hat nach der Diagnose E5.5 (`ff76f7e`) entschieden: neuer Status-Fluss, Guide als dritte Rolle, E-Mail nur als Queue, fünf Teile nacheinander (DECISIONS 03.10.). TEIL 1 (Dashboard erreichbar = E5.5b) ist GEBAUT und VERIFIZIERT, aber NICHT committet. Ebenso E5.5a (Migration 0011). Beides wartet auf Marcos Bestätigung (Hard Rule 3). Danach Stopp vor TEIL 2 (Guide-Rolle).**
 
-- E5.4-Commits: `d08f8e1` Migrationen 0009/0010, `60ca6ab` Promoter-Portal, `abe39c0` Tests, danach der Doku-Commit.
+- Das Dashboard existierte vorher nicht (Marco nahm an, es sei gebaut) und wurde in Teil 1 gebaut: `/promoter/dashboard`, Link „Mein Dashboard“ in der Kopfzeile.
 - Diese Datei darf als einzige überschrieben werden. Erledigte Schritte stehen in `docs/CHANGELOG.md`.
 
 ## Wo wir stehen
 
-- **Migrationen 0001–0010** sind lokal eingespielt (`docker exec … psql`, Historie bis `0010`) und committet.
-- **Lokale DB (nur Testdaten, nicht im Repo):**
-  - 0 Buchungen, 0 Audit-Zeilen (Marco hat nach seinem Test aufgeräumt).
-  - 2 Termine, je mit Kontingent 30 und 0 belegt:
-    - „Party Bus – Megapark Funbus“, 10.10., intern
-    - „Barca Samba Disco-Boot“, 12.10.
-  - **Test-Preis an beiden Events:** Ticket 74,90 €, Anzahlung 30,00 €/Person (Termin-Ausnahmen in `pricing_rules`).
-  - Ein Standard-Ticketpreis ist weiterhin nicht eingetragen (F15).
-- **Aktive Gruppenregel ist 10/1** (ab 29.09., vermutlich E3-Testwert; eigentlich 11/1) — Marco entscheidet.
-- **Verifikation vor dem Commit:** `tsc` 0, `eslint` 0, **`npm test` 216/216 in 16 Dateien**.
+- **Migrationen 0001–0011** lokal eingespielt; 0001–0010 committet, **0011 nicht**.
+- **Arbeitsbaum (uncommittet):**
+  - E5.5a: `supabase/migrations/0011_sales_reporting_views.sql`, `tests/sales-reporting.test.ts`, `tests/events-rules-rls.test.ts`
+  - Teil 1: `src/app/promoter/layout.tsx`, `src/app/promoter/dashboard/page.tsx` (neu), `src/lib/promoter/queries.ts`, `src/lib/promoter/dashboard.ts` (neu), `tests/promoter-dashboard.test.ts` (neu), `tests/app-access.test.ts`
+  - Doku: CHANGELOG (E5.5a + Diagnose + Teil 1), DECISIONS (E5.5 + Entscheidungen nach der Diagnose), RISKS (Nr. 8/21/24/25, F25–F33), TASKS, diese Datei
+- **Lokale DB:** 1 Buchung — Marcos Browser-Verkauf (Party Bus, 10 P., Vollzahler, 674,10 €), Party Bus 10/30 belegt. Diese Buchung lässt `bookings-rls` „Audit-Log nur eigener Buchung“ rot werden (der Test erwartet keine fremden Promoter-Buchungen). **Marco entscheidet: löschen (Aufräum-Befehl unten) oder Test robuster machen.**
+- **Verifikation Teil 1:** `tsc` 0, `eslint` 0, `npm test` 234/235 in 18 Dateien (rot nur der o. g. Test), echte Zahlen HTML = DB 17/17 (Testverkäufe danach entfernt).
+
+## Commit-Vorschlag (wartet auf Marcos OK; `git diff` je Schritt, gezielt per Pfad)
+
+1. **E5.5a Auswertung:** `supabase/migrations/0011_sales_reporting_views.sql`, `tests/sales-reporting.test.ts`, `tests/events-rules-rls.test.ts`
+2. **Teil 1 Dashboard:** `src/app/promoter/layout.tsx`, `src/app/promoter/dashboard/page.tsx`, `src/lib/promoter/queries.ts`, `src/lib/promoter/dashboard.ts`, `tests/promoter-dashboard.test.ts`, `tests/app-access.test.ts`
+3. **docs:** `docs/CHANGELOG.md`, `docs/DECISIONS.md`, `docs/RISKS.md`, `TASKS.md`, `PROGRESS.md`
+
+## Browser-Test Teil 1 (Marco)
+
+1. `npm run dev` läuft → http://127.0.0.1:3001, Login **promoter@mmb-promoter.test / promoter-test-2026**.
+2. Kopfzeile oben rechts: „Events · Mein Dashboard · Abmelden“ → „Mein Dashboard“ tippen.
+3. Erwartet mit deinem Verkauf vom Nachmittag:
+   - Heute: 1 Abschluss, 674,10 €, Provision 90,00 €
+   - Gesamt: 10 Tickets (9 bezahlt · 1 gratis), kassiert 674,10 €, offen 0,00 €
+   - Balken am heutigen Tag
+   - Verkauf in der Liste
+4. Einen neuen Verkauf machen → Dashboard neu laden → Zahlen steigen genau um den Verkauf.
+5. Als operator@… `/promoter/dashboard` aufrufen → `/kein-zugang`.
+
+## Offen für Marco
+
+| Frage | blockiert |
+|---|---|
+| **Commit E5.5a + Teil 1** + Begriffe (DECISIONS 03.10. E5.5) | Teil 2 |
+| Marcos Browser-Verkauf in der lokalen DB löschen? (`bookings-rls` rot) | grüner `npm test` |
+| **F29/F30** Guide-Rechte pro Event, „Tagesbestellungen“ | Teil 2 |
+| Reihenfolge Teil 3–5; F26–F28, F32, F33 | Teil 3 |
+| **F25** Abrechnung Promoter ↔ Gabo | Spalte „abzuführen“ (Admin-Auswertung) |
+| Gruppenregel 10/1 lokal oder 11/1? · F15 · F10 · F13 | später |
 
 ## Handy-Test E5.4 (von Marco am 03.10.2026 im Browser bestätigt — bleibt als Referenz)
 
@@ -64,7 +90,8 @@ Die Test-Preise bleiben stehen (append-only; ändern per neuer Zeile auf der Ter
 
 | Frage | blockiert |
 |---|---|
-| E5.5-Zerlegung und Teilschritt 1 (Plan im Chat) | E5.5 |
+| **Commit E5.5a** + Begriffe bestätigen (Umsatz = Gesamtpreis nicht stornierter Verkäufe, daneben kassiert/offen; heute = Ortszeit Mallorca; Storno separat) — DECISIONS 03.10. E5.5 | E5.5b |
+| **F25** Abrechnung Promoter ↔ Gabo (Provision aus dem Bargeld einbehalten oder später ausgezahlt?) | Spalte „abzuführen“ in E5.5c |
 | Gruppenregel 10/1 in der lokalen DB stehen lassen oder auf 11/1 zurück? | nichts (nur Testwerte) |
 | Reihenfolge danach: Storno-Funktion + Nachrichten-Auslöser (aus E5.4 ausgelagert), Dashboard (E5.5), Admin-Storno-UI | nächster Schritt |
 | F15 Ticketpreis-Betrag (echt) · F10 Storno-Provision · F13 Gabo im Promoter-Bereich | später |
@@ -86,7 +113,7 @@ Nach einem harten PC-Neustart kann Postgres ~13 min in der Crash-Recovery hänge
 
 ```
 docker ps --format '{{.Names}} {{.Status}}' | findstr mmb-promoter
-npm test                # 16 Dateien, 216 Tests (app-access nur mit laufendem Dev-Server; event-images-HTTP nur mit Storage-API)
+npm test                # 17 Dateien, 227 Tests (app-access nur mit laufendem Dev-Server; event-images-HTTP nur mit Storage-API)
 npx next typegen && npx tsc --noEmit && npx eslint src tests
 npm run dev             # http://127.0.0.1:3001
 ```
@@ -100,7 +127,7 @@ npm run dev             # http://127.0.0.1:3001
 
 ## Was existiert
 
-- **Migrationen 0001–0010:** 0009 bringt die Zahlungsstufe `not_collected`, 0010 die Verkaufs-Funktionen.
+- **Migrationen 0001–0011:** 0009 bringt die Zahlungsstufe `not_collected`, 0010 die Verkaufs-Funktionen, 0011 die Auswertungs-Sichten `sales_totals`/`sales_by_day`/`sales_by_promoter`/`sales_by_departure` (security_invoker, noch von keiner Seite gelesen).
 - **Admin:** Termine, Regeln, Vorlagen, Bilder.
 - **Promoter:**
   - Events + eigene Verkäufe (`/promoter`)
@@ -116,7 +143,7 @@ npm run dev             # http://127.0.0.1:3001
 
 - Storno-Funktion + Admin-Storno-UI
 - Nachrichten-Auslöser (`notifications` bleibt leer)
-- Volles Promoter-Dashboard (E5.5)
+- Promoter-Dashboard (E5.5b) und Admin-Auswertung (E5.5c)
 - Bild-Anzeige im Promoter-Portal
 - Konto-Verwaltung (E4)
 - Standard-Ticketpreis (F15)
