@@ -82,9 +82,9 @@ describe("Migration 0004 — Struktur", () => {
         and privilege_type in ('INSERT','UPDATE')
       group by privilege_type order by privilege_type
     `;
-    const gabo = "capacity_total,is_internal,note,starts_at,status,title";
+    const gabo = "capacity_total,image_path,is_internal,note,starts_at,status,title";
     // E5.2 (Migration 0007): Herkunft template_id nur beim Anlegen (INSERT), nie nachträglich (UPDATE).
-    const gaboInsert = "capacity_total,is_internal,note,starts_at,status,template_id,title";
+    const gaboInsert = "capacity_total,image_path,is_internal,note,starts_at,status,template_id,title";
     expect(cols).toEqual([
       { privilege_type: "INSERT", cols: gaboInsert },
       { privilege_type: "UPDATE", cols: gabo },

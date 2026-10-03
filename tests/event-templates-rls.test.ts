@@ -88,7 +88,7 @@ describe("Migration 0007 — Struktur und Rechte", () => {
         and privilege_type = 'UPDATE'
     `;
     expect(cols).toEqual([
-      { cols: "active,capacity_total,commission_cents,deposit_cents,is_internal,name,note,ticket_price_cents,title" },
+      { cols: "active,capacity_total,commission_cents,deposit_cents,image_path,is_internal,name,note,ticket_price_cents,title" },
     ]);
     const anon = await sql`
       select privilege_type from information_schema.table_privileges
