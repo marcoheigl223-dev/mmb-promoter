@@ -116,6 +116,21 @@ describe("Migration 0004 — Struktur", () => {
     ]);
   });
 
+  it("authenticated: auf profiles INSERT nur (id, role, display_name, active), UPDATE nur (active, display_name) — Teil 2, 0013", async () => {
+    const cols = await sql`
+      select privilege_type, string_agg(column_name, ',' order by column_name) as cols
+      from information_schema.column_privileges
+      where table_schema = 'public' and table_name = 'profiles' and grantee = 'authenticated'
+        and privilege_type in ('INSERT','UPDATE')
+      group by privilege_type order by privilege_type
+    `;
+    // Rolle nur beim Anlegen, danach unveränderlich; kein DELETE (Tabellen-Rechte oben: nur SELECT).
+    expect(cols).toEqual([
+      { privilege_type: "INSERT", cols: "active,display_name,id,role" },
+      { privilege_type: "UPDATE", cols: "active,display_name" },
+    ]);
+  });
+
   it("anon hat auf keiner Tabelle in public irgendein Recht (auch kein TRUNCATE mehr)", async () => {
     const rows = await sql`
       select table_name, privilege_type from information_schema.table_privileges

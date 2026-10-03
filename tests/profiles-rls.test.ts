@@ -10,6 +10,7 @@ import { connect } from "./db";
 const OPERATOR = "11111111-1111-4111-8111-111111111111";
 const PROMOTER = "22222222-2222-4222-8222-222222222222";
 const INACTIVE = "33333333-3333-4333-8333-333333333333";
+const GUIDE = "44444444-4444-4444-8444-444444444444"; // Teil 2 (seed.sql)
 const UNKNOWN = "99999999-9999-4999-8999-999999999999";
 
 const sql = connect(1);
@@ -63,11 +64,13 @@ describe("Migration 0003 — Struktur", () => {
   });
 
   it("Seed: je Rolle ein aktives Konto + ein deaktivierter Promoter", async () => {
-    const rows = await sql`select id, role, active from profiles order by id`;
+    // Auf die Seed-IDs eingegrenzt: Gabo kann lokal weitere Konten angelegt haben (Teil 2).
+    const rows = await sql`select id, role::text as role, active from profiles where id in (${OPERATOR}, ${PROMOTER}, ${INACTIVE}, ${GUIDE}) order by id`;
     expect(rows).toEqual([
       { id: OPERATOR, role: "network_operator", active: true },
       { id: PROMOTER, role: "promoter", active: true },
       { id: INACTIVE, role: "promoter", active: false },
+      { id: GUIDE, role: "guide", active: true },
     ]);
   });
 
@@ -94,7 +97,9 @@ describe("profiles — Rolle kommt aus der DB, nicht aus dem Token", () => {
 
   it("network_operator sieht alle Profile", async () => {
     const rows = await asUser(OPERATOR, (tx) => tx`select id from profiles order by id`);
-    expect(rows.map((r) => r.id)).toEqual([OPERATOR, PROMOTER, INACTIVE]);
+    const all = await sql`select id from profiles order by id`;
+    expect(rows.map((r) => r.id)).toEqual(all.map((r) => r.id));
+    expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining([OPERATOR, PROMOTER, INACTIVE, GUIDE]));
   });
 
   it("deaktivierter Promoter sieht noch die eigene Zeile (für die Sperr-Anzeige), sonst nichts", async () => {

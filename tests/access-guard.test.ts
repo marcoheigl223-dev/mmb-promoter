@@ -23,6 +23,12 @@ const promoter: Profile = {
   display_name: "Test-Promoter",
 };
 const inactivePromoter: Profile = { ...promoter, active: false };
+const guide: Profile = {
+  id: "44444444-4444-4444-8444-444444444444",
+  role: "guide",
+  active: true,
+  display_name: "Test-Guide",
+};
 
 describe("decideAccess", () => {
   it("nicht eingeloggt → /login (beide Bereiche)", () => {
@@ -71,6 +77,35 @@ describe("decideAccess", () => {
     ).toMatchObject({ kind: "redirect", to: "/kein-zugang", reason: "wrong_role" });
   });
 
+  it("Guide (Teil 2) kommt in den Promoter-Bereich (verkaufen, eigenes Dashboard)", () => {
+    expect(
+      decideAccess({ area: "promoter", userId: guide.id, profile: guide }),
+    ).toEqual({ kind: "allow", profile: guide });
+  });
+
+  it("Guide kommt NICHT ins Admin (network_operator) → /kein-zugang", () => {
+    expect(
+      decideAccess({ area: "admin", userId: guide.id, profile: guide }),
+    ).toEqual({ kind: "redirect", to: "/kein-zugang", reason: "wrong_role" });
+  });
+
+  it("deaktivierter Guide kommt nirgends rein → /gesperrt", () => {
+    for (const area of ["admin", "promoter"] as const) {
+      expect(
+        decideAccess({ area, userId: guide.id, profile: { ...guide, active: false } }),
+      ).toEqual({ kind: "redirect", to: "/gesperrt", reason: "inactive" });
+    }
+  });
+
+  it("unbekannte Rolle (z. B. neuer Enum-Wert ohne Freigabe) kommt in keinen Bereich", () => {
+    const unknown = { ...promoter, role: "auditor" } as unknown as Profile;
+    for (const area of ["admin", "promoter"] as const) {
+      expect(
+        decideAccess({ area, userId: unknown.id, profile: unknown }),
+      ).toMatchObject({ kind: "redirect", to: "/kein-zugang", reason: "wrong_role" });
+    }
+  });
+
   it("inaktiver Promoter kommt nirgends rein → /gesperrt", () => {
     for (const area of ["admin", "promoter"] as const) {
       expect(
@@ -98,6 +133,8 @@ describe("landingPathFor", () => {
   it("leitet nach Rolle aus der DB", () => {
     expect(landingPathFor(operator)).toBe("/admin");
     expect(landingPathFor(promoter)).toBe("/promoter");
+    expect(landingPathFor(guide)).toBe("/promoter");
+    expect(landingPathFor({ ...guide, active: false })).toBe("/gesperrt");
     expect(landingPathFor(inactivePromoter)).toBe("/gesperrt");
     expect(landingPathFor(null)).toBe("/kein-zugang");
   });

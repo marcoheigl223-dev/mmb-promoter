@@ -43,6 +43,8 @@ describe("Seed-Konten (nur lokal)", () => {
     ["operator@mmb-promoter.test", "operator-test-2026", "11111111-1111-4111-8111-111111111111"],
     ["promoter@mmb-promoter.test", "promoter-test-2026", "22222222-2222-4222-8222-222222222222"],
     ["inactive-promoter@mmb-promoter.test", "inactive-test-2026", "33333333-3333-4333-8333-333333333333"],
+    // Teil 2: Test-Guide (supabase/seed.sql)
+    ["guide@mmb-promoter.test", "guide-test-2026", "44444444-4444-4444-8444-444444444444"],
   ])("%s kann sich bei GoTrue anmelden (Sperre für inaktiv passiert in der App/RLS)", async (email, pw, id) => {
     const r = await login(email, pw);
     expect(r.status).toBe(200);

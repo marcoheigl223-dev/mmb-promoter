@@ -203,6 +203,56 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     expect(anon.location).toContain("/login");
   });
 
+  // Teil 2 — Guide als dritte Rolle: verkauft und hat ein eigenes Dashboard wie ein
+  // Promoter, kommt aber auf keine Admin-Seite. Konto-Verwaltung nur für Gabo.
+  it("Teil 2: Guide kommt in /promoter (Events, Verkaufen, Dashboard), NICHT ins Admin → /kein-zugang", async () => {
+    const cookie = await sessionCookie("guide@mmb-promoter.test", "guide-test-2026");
+    const home = await get("/promoter", cookie);
+    expect(home.status).toBe(200);
+    expect(home.text).toContain("Events verkaufen");
+    expect(home.text).toContain("Guide");
+    const dash = await get("/promoter/dashboard", cookie);
+    expect(dash.status).toBe(200);
+    expect(dash.text).toContain("Alle meine Verkäufe");
+    expect((await get("/promoter/verkaufen/00000000-0000-4000-8000-000000000000", cookie)).status).toBe(404);
+    for (const p of [
+      "/admin",
+      "/admin/konten",
+      "/admin/konten/22222222-2222-4222-8222-222222222222",
+      "/admin/termine/neu",
+      "/admin/regeln",
+      "/admin/vorlagen",
+    ]) {
+      const r = await get(p, cookie);
+      expect(r.status, p).toBe(307);
+      expect(r.location, p).toContain("/kein-zugang");
+    }
+    const root = await get("/", cookie);
+    expect(root.location ?? "").toContain("/promoter");
+  });
+
+  it("Teil 2: Konto-Verwaltung — Operator sieht Promoter und Guides getrennt, Promoter kommt nicht hin", async () => {
+    const op = await sessionCookie("operator@mmb-promoter.test", "operator-test-2026");
+    const list = await get("/admin/konten", op);
+    expect(list.status).toBe(200);
+    for (const t of ["Konten", "Promoter", "Guides", "Neuen Promoter anlegen", "Neuen Guide anlegen", "guide@mmb-promoter.test", "promoter@mmb-promoter.test"]) {
+      expect(list.text, t).toContain(t);
+    }
+    // Gabos eigenes Konto wird hier nicht verwaltet
+    expect(list.text).not.toContain("operator@mmb-promoter.test");
+    const detail = await get("/admin/konten/44444444-4444-4444-8444-444444444444", op);
+    expect(detail.status).toBe(200);
+    expect(detail.text).toContain("Test-Guide");
+    expect((await get("/admin/konten/11111111-1111-4111-8111-111111111111", op)).status).toBe(404);
+    expect((await get("/admin/konten/keine-uuid", op)).status).toBe(404);
+    const pr = await sessionCookie("promoter@mmb-promoter.test", "promoter-test-2026");
+    for (const p of ["/admin/konten", "/admin/konten/44444444-4444-4444-8444-444444444444"]) {
+      const r = await get(p, pr);
+      expect(r.status, p).toBe(307);
+      expect(r.location, p).toContain("/kein-zugang");
+    }
+  });
+
   it("noindex überall: X-Robots-Tag + robots.txt", async () => {
     const res = await fetch(`${APP}/login`);
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");

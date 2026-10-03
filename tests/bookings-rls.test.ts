@@ -363,9 +363,13 @@ describe("RLS bookings — Promoter nur eigene, Operator alle, inaktiv nichts, a
 
 describe("RLS booking_audit_log + notifications — folgen der Buchung", () => {
   it("Promoter liest Audit-Log und Nachrichten nur seiner eigenen Buchung", async () => {
-    const audit = await asUser(PROMOTER, (tx) => tx`select booking_id, action::text as action from booking_audit_log`);
+    // Auf die Test-Buchungen eingegrenzt: Der Seed-Promoter kann in der lokalen DB weitere
+    // eigene Verkäufe aus Browser-Tests haben (Teil 2). Fremde Zeilen dürfen nie dabei sein.
+    const audit = await asUser(PROMOTER, (tx) => tx`select booking_id, action::text as action from booking_audit_log where booking_id in (${ownBookingId}, ${otherBookingId})`);
     expect(audit).toEqual([{ booking_id: ownBookingId, action: "sold" }]);
-    const notes = await asUser(PROMOTER, (tx) => tx`select booking_id, kind::text as kind, status::text as status from notifications order by kind`);
+    const foreignAudit = await asUser(PROMOTER, (tx) => tx`select id from booking_audit_log where booking_id not in (select id from bookings where promoter_id = ${PROMOTER})`);
+    expect(foreignAudit).toEqual([]);
+    const notes = await asUser(PROMOTER, (tx) => tx`select booking_id, kind::text as kind, status::text as status from notifications where booking_id in (${ownBookingId}, ${otherBookingId}) order by kind`);
     expect(notes).toEqual([
       { booking_id: ownBookingId, kind: "booking_confirmation", status: "pending" },
       { booking_id: ownBookingId, kind: "reminder_4h", status: "pending" },
