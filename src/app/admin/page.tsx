@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { requireArea } from "@/lib/auth/dal";
-import { listDeparturesSplit } from "@/lib/admin/queries";
+import { listDeparturesSplit, signedImageUrls } from "@/lib/admin/queries";
 import { formatMadrid } from "@/lib/admin/time";
 import { STATUS_LABELS, type Departure } from "@/lib/admin/types";
 
@@ -9,6 +9,8 @@ import { STATUS_LABELS, type Departure } from "@/lib/admin/types";
 export default async function AdminPage() {
   await requireArea("admin");
   const { upcoming, past } = await listDeparturesSplit();
+  // E5.3: Vorschaubilder — eine Signier-Anfrage für alle Pfade (privater Bucket)
+  const imageUrls = await signedImageUrls([...upcoming, ...past].map((d) => d.image_path));
 
   return (
     <main className="flex flex-col gap-6">
@@ -28,13 +30,21 @@ export default async function AdminPage() {
         </p>
       )}
 
-      {upcoming.length > 0 && <DepartureTable title="Kommende" rows={upcoming} />}
-      {past.length > 0 && <DepartureTable title="Vergangene" rows={past} />}
+      {upcoming.length > 0 && <DepartureTable title="Kommende" rows={upcoming} imageUrls={imageUrls} />}
+      {past.length > 0 && <DepartureTable title="Vergangene" rows={past} imageUrls={imageUrls} />}
     </main>
   );
 }
 
-function DepartureTable({ title, rows }: { title: string; rows: Departure[] }) {
+function DepartureTable({
+  title,
+  rows,
+  imageUrls,
+}: {
+  title: string;
+  rows: Departure[];
+  imageUrls: Record<string, string>;
+}) {
   return (
     <section>
       <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
@@ -44,6 +54,7 @@ function DepartureTable({ title, rows }: { title: string; rows: Departure[] }) {
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-neutral-500">
             <tr>
+              <th className="py-1 pr-2"></th>
               <th className="py-1 pr-4">Wann</th>
               <th className="py-1 pr-4">Titel</th>
               <th className="py-1 pr-4 text-right">Kontingent</th>
@@ -55,6 +66,9 @@ function DepartureTable({ title, rows }: { title: string; rows: Departure[] }) {
           <tbody>
             {rows.map((d) => (
               <tr key={d.id} className="border-t border-neutral-200 dark:border-neutral-800">
+                <td className="py-2 pr-2">
+                  <Thumbnail url={d.image_path ? (imageUrls[d.image_path] ?? null) : null} />
+                </td>
                 <td className="py-2 pr-4 whitespace-nowrap">{formatMadrid(d.starts_at)}</td>
                 <td className="py-2 pr-4">
                   <Link href={`/admin/termine/${d.id}`} className="underline">
@@ -77,4 +91,14 @@ function DepartureTable({ title, rows }: { title: string; rows: Departure[] }) {
       </div>
     </section>
   );
+}
+
+/** E5.3: Vorschaubild (signierte URL) oder Platzhalter. */
+function Thumbnail({ url }: { url: string | null }) {
+  if (!url) {
+    return <span className="block h-10 w-14 rounded bg-neutral-100 dark:bg-neutral-800" aria-hidden="true" />;
+  }
+  // Signierte URL läuft ab — next/image hätte keinen stabilen Cache-Schlüssel.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="h-10 w-14 rounded object-cover" />;
 }

@@ -22,6 +22,8 @@ export type Departure = {
   note: string | null;
   /** E5.2 (0007): Herkunft — aus welcher Vorlage angelegt (null = von Hand). Nur Information, Werte sind kopiert. */
   template_id: string | null;
+  /** E5.3 (0008): Pfad des Event-Bilds im privaten Bucket event-images (null = kein Bild). Aus der Vorlage kopiert oder eigenes. */
+  image_path: string | null;
   created_at: string;
 };
 
@@ -96,6 +98,8 @@ export type EventTemplate = {
   ticket_price_cents: number | null;
   deposit_cents: number | null;
   commission_cents: number | null;
+  /** E5.3 (0008): Pfad des Vorlagen-Bilds im privaten Bucket event-images (null = kein Bild); wird beim Event-Anlegen übernommen. */
+  image_path: string | null;
   /** false = deaktiviert (statt löschen) */
   active: boolean;
   created_by: string | null;

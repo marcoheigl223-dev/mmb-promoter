@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { requireArea } from "@/lib/auth/dal";
-import { listTemplates } from "@/lib/admin/queries";
+import { listTemplates, signedImageUrls } from "@/lib/admin/queries";
 import { formatCents } from "@/lib/admin/money";
 import type { EventTemplate } from "@/lib/admin/types";
 
@@ -9,6 +9,8 @@ import type { EventTemplate } from "@/lib/admin/types";
 export default async function TemplatesPage() {
   await requireArea("admin");
   const templates = await listTemplates();
+  // E5.3: Vorschaubilder — eine Signier-Anfrage für alle Pfade (privater Bucket)
+  const imageUrls = await signedImageUrls(templates.map((t) => t.image_path));
   const active = templates.filter((t) => t.active);
   const inactive = templates.filter((t) => !t.active);
 
@@ -36,8 +38,8 @@ export default async function TemplatesPage() {
         </p>
       )}
 
-      {active.length > 0 && <TemplateTable title="Aktiv" rows={active} />}
-      {inactive.length > 0 && <TemplateTable title="Deaktiviert" rows={inactive} />}
+      {active.length > 0 && <TemplateTable title="Aktiv" rows={active} imageUrls={imageUrls} />}
+      {inactive.length > 0 && <TemplateTable title="Deaktiviert" rows={inactive} imageUrls={imageUrls} />}
     </main>
   );
 }
@@ -46,7 +48,15 @@ function amountOrStandard(cents: number | null) {
   return cents === null ? <span className="text-neutral-500">Standard</span> : formatCents(cents);
 }
 
-function TemplateTable({ title, rows }: { title: string; rows: EventTemplate[] }) {
+function TemplateTable({
+  title,
+  rows,
+  imageUrls,
+}: {
+  title: string;
+  rows: EventTemplate[];
+  imageUrls: Record<string, string>;
+}) {
   return (
     <section>
       <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">{title}</h2>
@@ -54,6 +64,7 @@ function TemplateTable({ title, rows }: { title: string; rows: EventTemplate[] }
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-neutral-500">
             <tr>
+              <th className="py-1 pr-2"></th>
               <th className="py-1 pr-4">Vorlage</th>
               <th className="py-1 pr-4">Event-Titel</th>
               <th className="py-1 pr-4 text-right">Kontingent</th>
@@ -66,6 +77,9 @@ function TemplateTable({ title, rows }: { title: string; rows: EventTemplate[] }
           <tbody>
             {rows.map((t) => (
               <tr key={t.id} className="border-t border-neutral-200 dark:border-neutral-800">
+                <td className="py-2 pr-2">
+                  <Thumbnail url={t.image_path ? (imageUrls[t.image_path] ?? null) : null} />
+                </td>
                 <td className="py-2 pr-4">
                   <Link href={`/admin/vorlagen/${t.id}`} className="underline">
                     {t.name}
@@ -97,4 +111,14 @@ function TemplateTable({ title, rows }: { title: string; rows: EventTemplate[] }
       </div>
     </section>
   );
+}
+
+/** E5.3: Vorschaubild (signierte URL) oder Platzhalter. */
+function Thumbnail({ url }: { url: string | null }) {
+  if (!url) {
+    return <span className="block h-10 w-14 rounded bg-neutral-100 dark:bg-neutral-800" aria-hidden="true" />;
+  }
+  // Signierte URL läuft ab — next/image hätte keinen stabilen Cache-Schlüssel.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="h-10 w-14 rounded object-cover" />;
 }

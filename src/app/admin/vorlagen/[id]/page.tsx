@@ -6,11 +6,13 @@ import {
   effectiveCommissionCents,
   getTemplate,
   listDeparturesFromTemplate,
+  signedImageUrl,
   standardPricing,
 } from "@/lib/admin/queries";
 import { formatMadrid } from "@/lib/admin/time";
 import { STATUS_LABELS } from "@/lib/admin/types";
-import { updateTemplate } from "../actions";
+import { ImageForm } from "../../image-form";
+import { removeTemplateImage, updateTemplate, uploadTemplateImage } from "../actions";
 import { TemplateActiveForm, TemplateForm } from "../template-form";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,10 +25,12 @@ export default async function TemplatePage(props: PageProps<"/admin/vorlagen/[id
   const template = await getTemplate(id);
   if (!template) notFound();
 
-  const [standard, commission, departures] = await Promise.all([
+  const [standard, commission, departures, imageUrl] = await Promise.all([
     standardPricing(),
     effectiveCommissionCents(null),
     listDeparturesFromTemplate(id),
+    // E5.3: privater Bucket → signierte URL (1 h), null ohne Bild
+    signedImageUrl(template.image_path),
   ]);
 
   return (
@@ -71,6 +75,17 @@ export default async function TemplatePage(props: PageProps<"/admin/vorlagen/[id
           submitLabel="Speichern"
           standardPricing={standard}
           standardCommission={commission}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <h2 className="text-lg font-semibold">Bild</h2>
+        <ImageForm
+          id={template.id}
+          imageUrl={imageUrl}
+          uploadAction={uploadTemplateImage}
+          removeAction={removeTemplateImage}
+          hint="Wird beim Anlegen eines Events aus dieser Vorlage übernommen; bestehende Events bleiben unverändert."
         />
       </section>
 

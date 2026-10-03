@@ -7,11 +7,13 @@ import {
   departurePricingSummary,
   getDeparture,
   getTemplate,
+  signedImageUrl,
 } from "@/lib/admin/queries";
 import { formatCents } from "@/lib/admin/money";
 import { formatMadrid } from "@/lib/admin/time";
 import { PRICING_KIND_LABELS, STATUS_LABELS, type PricingKind } from "@/lib/admin/types";
-import { updateDeparture } from "../actions";
+import { ImageForm } from "../../image-form";
+import { removeDepartureImage, updateDeparture, uploadDepartureImage } from "../actions";
 import { DepartureForm } from "../departure-form";
 import { CommissionOverrideForm } from "./commission-override-form";
 
@@ -25,11 +27,13 @@ export default async function DeparturePage(props: PageProps<"/admin/termine/[id
   const departure = await getDeparture(id);
   if (!departure) notFound();
 
-  const [{ overrides, effective, standard, usesOverride }, pricing, template] = await Promise.all([
+  const [{ overrides, effective, standard, usesOverride }, pricing, template, imageUrl] = await Promise.all([
     departureCommissionSummary(id),
     departurePricingSummary(id),
     // E5.2: Herkunft anzeigen (Werte sind kopiert, kein Live-Bezug)
     departure.template_id ? getTemplate(departure.template_id) : Promise.resolve(null),
+    // E5.3: privater Bucket → signierte URL (1 h), null ohne Bild
+    signedImageUrl(departure.image_path),
   ]);
   const free = departure.capacity_total - departure.seats_booked_total;
 
@@ -78,6 +82,21 @@ export default async function DeparturePage(props: PageProps<"/admin/termine/[id
           submitLabel="Speichern"
           standardPricing={pricing.standard}
           overridePricing={pricing.override}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <h2 className="text-lg font-semibold">Bild</h2>
+        <ImageForm
+          id={departure.id}
+          imageUrl={imageUrl}
+          uploadAction={uploadDepartureImage}
+          removeAction={removeDepartureImage}
+          hint={
+            template && departure.image_path && departure.image_path === template.image_path
+              ? "Aus der Vorlage übernommen. Ein neues Bild gilt nur für diesen Termin."
+              : undefined
+          }
         />
       </section>
 

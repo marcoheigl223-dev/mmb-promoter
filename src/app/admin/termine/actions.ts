@@ -6,6 +6,13 @@ import { redirect } from "next/navigation";
 import { requireArea } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { dbErrorMessage } from "@/lib/admin/errors";
+import {
+  discardUploadedImage,
+  removeStoredImageIfUnreferenced,
+  setImageOnRow,
+  storeImage,
+  validateImageFile,
+} from "@/lib/admin/images";
 import { parseEuroToCents } from "@/lib/admin/money";
 import {
   depositAbovePriceError,
@@ -245,4 +252,46 @@ export async function setDepartureCommission(
     error: null,
     ok: mode === "standard" ? "Ab jetzt gilt wieder der Standard." : "Ausnahme gespeichert.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// E5.3 (0008): Bild des Termins/Events — Upload ersetzt, Entfernen setzt null
+// ---------------------------------------------------------------------------
+
+export async function uploadDepartureImage(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireArea("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { error: "Ungültiger Termin.", ok: null };
+  const checked = validateImageFile(formData.get("image"));
+  if ("error" in checked) return { error: checked.error, ok: null };
+
+  const stored = await storeImage("departures", id, checked.file);
+  if ("error" in stored) return { error: stored.error, ok: null };
+
+  const saved = await setImageOnRow("tour_departures", id, stored.path);
+  if ("error" in saved) {
+    await discardUploadedImage(stored.path);
+    return { error: saved.error, ok: null };
+  }
+  // Ein aus der Vorlage übernommenes Bild bleibt im Bucket, solange die Vorlage es nutzt.
+  await removeStoredImageIfUnreferenced(saved.oldPath);
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/termine/${id}`);
+  return { error: null, ok: "Bild gespeichert." };
+}
+
+export async function removeDepartureImage(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireArea("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { error: "Ungültiger Termin.", ok: null };
+
+  const saved = await setImageOnRow("tour_departures", id, null);
+  if ("error" in saved) return { error: saved.error, ok: null };
+  if (!saved.oldPath) return { error: "Dieser Termin hat kein Bild.", ok: null };
+  await removeStoredImageIfUnreferenced(saved.oldPath);
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/termine/${id}`);
+  return { error: null, ok: "Bild entfernt." };
 }

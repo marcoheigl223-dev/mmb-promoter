@@ -6,6 +6,13 @@ import { redirect } from "next/navigation";
 import { requireArea } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { dbErrorMessage } from "@/lib/admin/errors";
+import {
+  discardUploadedImage,
+  removeStoredImageIfUnreferenced,
+  setImageOnRow,
+  storeImage,
+  validateImageFile,
+} from "@/lib/admin/images";
 import { depositAbovePriceError, parseOptionalEuro } from "@/lib/admin/pricing";
 import { standardPricing } from "@/lib/admin/queries";
 import type { EventTemplateInput, FormState } from "@/lib/admin/types";
@@ -137,4 +144,47 @@ export async function setTemplateActive(_prev: FormState, formData: FormData): P
     error: null,
     ok: active ? "Vorlage ist wieder aktiv." : "Vorlage deaktiviert — daraus lassen sich keine neuen Events anlegen.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// E5.3 (0008): Bild der Vorlage — Upload ersetzt, Entfernen setzt null
+// ---------------------------------------------------------------------------
+
+export async function uploadTemplateImage(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireArea("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { error: "Ungültige Vorlage.", ok: null };
+  const checked = validateImageFile(formData.get("image"));
+  if ("error" in checked) return { error: checked.error, ok: null };
+
+  const stored = await storeImage("templates", id, checked.file);
+  if ("error" in stored) return { error: stored.error, ok: null };
+
+  const saved = await setImageOnRow("event_templates", id, stored.path);
+  if ("error" in saved) {
+    await discardUploadedImage(stored.path);
+    return { error: saved.error, ok: null };
+  }
+  await removeStoredImageIfUnreferenced(saved.oldPath);
+
+  revalidatePath("/admin/vorlagen");
+  revalidatePath(`/admin/vorlagen/${id}`);
+  revalidatePath("/admin/termine/neu");
+  return { error: null, ok: "Bild gespeichert. Bereits angelegte Events behalten ihr bisheriges Bild." };
+}
+
+export async function removeTemplateImage(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireArea("admin");
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { error: "Ungültige Vorlage.", ok: null };
+
+  const saved = await setImageOnRow("event_templates", id, null);
+  if ("error" in saved) return { error: saved.error, ok: null };
+  if (!saved.oldPath) return { error: "Diese Vorlage hat kein Bild.", ok: null };
+  await removeStoredImageIfUnreferenced(saved.oldPath);
+
+  revalidatePath("/admin/vorlagen");
+  revalidatePath(`/admin/vorlagen/${id}`);
+  revalidatePath("/admin/termine/neu");
+  return { error: null, ok: "Bild entfernt." };
 }

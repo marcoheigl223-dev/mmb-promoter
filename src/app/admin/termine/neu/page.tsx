@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { requireArea } from "@/lib/auth/dal";
-import { getTemplate, listTemplates, standardPricing } from "@/lib/admin/queries";
+import { getTemplate, listTemplates, signedImageUrl, standardPricing } from "@/lib/admin/queries";
 import { formatCents } from "@/lib/admin/money";
 import type { EventTemplate, PricingAmounts } from "@/lib/admin/types";
 import { createDeparture } from "../actions";
@@ -37,6 +37,8 @@ export default async function NewDeparturePage(props: PageProps<"/admin/termine/
   }
 
   if (template) {
+    // E5.3: Vorlagen-Bild wird mit übernommen — hier als Vorschau
+    const imageUrl = await signedImageUrl(template.image_path);
     return (
       <main className="flex flex-col gap-6">
         <div>
@@ -53,7 +55,7 @@ export default async function NewDeparturePage(props: PageProps<"/admin/termine/
           </p>
         </div>
 
-        <TemplateSummary template={template} standard={standard} />
+        <TemplateSummary template={template} standard={standard} imageUrl={imageUrl} />
 
         <FromTemplateForm template={template} />
       </main>
@@ -124,7 +126,15 @@ export default async function NewDeparturePage(props: PageProps<"/admin/termine/
 }
 
 /** Was aus der Vorlage ins Event kopiert wird — mit „Standard", wo die Vorlage nichts vorgibt. */
-function TemplateSummary({ template, standard }: { template: EventTemplate; standard: PricingAmounts }) {
+function TemplateSummary({
+  template,
+  standard,
+  imageUrl,
+}: {
+  template: EventTemplate;
+  standard: PricingAmounts;
+  imageUrl: string | null;
+}) {
   const line = (label: string, own: number | null, std: number | null) => (
     <>
       <dt className="text-neutral-500">{label}</dt>
@@ -164,6 +174,20 @@ function TemplateSummary({ template, standard }: { template: EventTemplate; stan
           <dd className="whitespace-pre-wrap">{template.note}</dd>
         </>
       )}
+      <dt className="text-neutral-500">Bild</dt>
+      <dd>
+        {template.image_path ? (
+          <span className="flex flex-col gap-1">
+            <span>wird übernommen</span>
+            {imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt="" className="h-20 w-auto rounded" />
+            )}
+          </span>
+        ) : (
+          "kein Bild"
+        )}
+      </dd>
     </dl>
   );
 }

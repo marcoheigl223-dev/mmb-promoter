@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { IMAGE_BUCKET, IMAGE_SIGNED_URL_SECONDS } from "./images";
 import { activeOverrideCents } from "./pricing";
 import {
   PRICING_KINDS,
@@ -20,7 +21,7 @@ import {
  */
 
 const DEPARTURE_COLUMNS =
-  "id, title, starts_at, capacity_total, seats_booked_total, status, is_internal, note, template_id, created_at";
+  "id, title, starts_at, capacity_total, seats_booked_total, status, is_internal, note, template_id, image_path, created_at";
 
 export async function listDepartures(): Promise<Departure[]> {
   const supabase = await createClient();
@@ -226,7 +227,7 @@ export async function departurePricingSummary(departureId: string): Promise<{
 // ---------------------------------------------------------------------------
 
 const TEMPLATE_COLUMNS =
-  "id, name, title, capacity_total, is_internal, note, ticket_price_cents, deposit_cents, commission_cents, active, created_by, created_at, updated_at";
+  "id, name, title, capacity_total, is_internal, note, ticket_price_cents, deposit_cents, commission_cents, image_path, active, created_by, created_at, updated_at";
 
 /** Alle Vorlagen: aktive zuerst, dann nach Name. */
 export async function listTemplates(): Promise<EventTemplate[]> {
@@ -261,4 +262,35 @@ export async function listDeparturesFromTemplate(templateId: string): Promise<De
     .order("starts_at", { ascending: false });
   if (error) throw new Error(`Termine der Vorlage konnten nicht gelesen werden: ${error.message}`);
   return (data ?? []) as Departure[];
+}
+
+// ---------------------------------------------------------------------------
+// E5.3 (0008): Bilder — privater Bucket, signierte URLs (F19)
+// ---------------------------------------------------------------------------
+
+/**
+ * Signierte URL für ein Bild (1 h) oder null. Die Storage-API prüft dabei die
+ * SELECT-Policy aus 0008 (nur aktive Profile) — ein deaktiviertes Profil
+ * bekommt keine URL. Fehler (z. B. Objekt fehlt) ergeben null, nie einen Absturz.
+ */
+export async function signedImageUrl(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(IMAGE_BUCKET).createSignedUrl(path, IMAGE_SIGNED_URL_SECONDS);
+  if (error || !data) return null;
+  return data.signedUrl;
+}
+
+/** Signierte URLs für mehrere Pfade in einem Aufruf (Listen); Ergebnis: Pfad → URL. */
+export async function signedImageUrls(paths: (string | null)[]): Promise<Record<string, string>> {
+  const unique = [...new Set(paths.filter((p): p is string => !!p))];
+  if (unique.length === 0) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(IMAGE_BUCKET).createSignedUrls(unique, IMAGE_SIGNED_URL_SECONDS);
+  if (error || !data) return {};
+  const out: Record<string, string> = {};
+  for (const item of data) {
+    if (item.path && item.signedUrl && !item.error) out[item.path] = item.signedUrl;
+  }
+  return out;
 }
