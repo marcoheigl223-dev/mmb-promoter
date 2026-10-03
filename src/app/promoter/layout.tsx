@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireArea } from "@/lib/auth/dal";
 import { logout } from "@/app/login/actions";
 
@@ -16,11 +18,19 @@ export default async function PromoterLayout({
           </p>
           <p className="font-medium">{profile.display_name}</p>
         </div>
-        <form action={logout}>
-          <button type="submit" className="text-sm underline">
-            Abmelden
-          </button>
-        </form>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/promoter" className="underline">
+            Events
+          </Link>
+          <Link href="/promoter/dashboard" className="underline">
+            Mein Dashboard
+          </Link>
+          <form action={logout}>
+            <button type="submit" className="underline">
+              Abmelden
+            </button>
+          </form>
+        </nav>
       </header>
       {children}
     </div>

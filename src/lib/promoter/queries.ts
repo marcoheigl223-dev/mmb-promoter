@@ -99,3 +99,100 @@ export async function getOwnBooking(id: string): Promise<PromoterBooking | null>
   if (error) throw new Error(`Verkauf laden fehlgeschlagen: ${error.message}`);
   return (data as unknown as PromoterBooking | null) ?? null;
 }
+
+/*
+ * Dashboard (E5.5b / Teil 1 nach der Diagnose): Kennzahlen kommen aus den
+ * Auswertungs-Sichten (Migration 0011, security_invoker) — die App summiert
+ * keine Beträge. Zusätzlich wird ausdrücklich auf die eigene promoter_id
+ * gefiltert: Bekommt eine Rolle später breitere Lese-Rechte (Guide, Teil 2),
+ * bleiben „meine Zahlen“ trotzdem meine (Diagnose E5.5, R2).
+ */
+
+export type OwnSalesSummary = {
+  sales_count: number;
+  tickets: number;
+  paid_tickets: number;
+  revenue_cents: number;
+  collected_cents: number;
+  due_cents: number;
+  commission_cents: number;
+  today_sales_count: number;
+  today_revenue_cents: number;
+  today_commission_cents: number;
+  cancelled_count: number;
+  cancelled_commission_cents: number;
+  last_sale_at: string | null;
+};
+
+const SUMMARY_NUMBER_KEYS = [
+  "sales_count",
+  "tickets",
+  "paid_tickets",
+  "revenue_cents",
+  "collected_cents",
+  "due_cents",
+  "commission_cents",
+  "today_sales_count",
+  "today_revenue_cents",
+  "today_commission_cents",
+  "cancelled_count",
+  "cancelled_commission_cents",
+] as const;
+
+/** Eigene Summen aus `sales_by_promoter`; ohne Verkauf gibt es keine Zeile → alles 0. */
+export async function getOwnSalesSummary(promoterId: string): Promise<OwnSalesSummary> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sales_by_promoter")
+    .select(`${SUMMARY_NUMBER_KEYS.join(", ")}, last_sale_at`)
+    .eq("promoter_id", promoterId)
+    .maybeSingle();
+  if (error) throw new Error(`Kennzahlen laden fehlgeschlagen: ${error.message}`);
+  const row = (data ?? {}) as Record<string, unknown>;
+  const summary = { last_sale_at: (row.last_sale_at as string | null) ?? null } as OwnSalesSummary;
+  for (const k of SUMMARY_NUMBER_KEYS) summary[k] = Number(row[k] ?? 0);
+  return summary;
+}
+
+export type SalesDayRow = {
+  sale_day: string;
+  sales_count: number;
+  tickets: number;
+  revenue_cents: number;
+  commission_cents: number;
+};
+
+/**
+ * Verkaufstage ab `fromDay` (YYYY-MM-DD, Ortszeit Mallorca) aus `sales_by_day`.
+ * Die Sicht hat keine Promoter-Spalte — für die Rolle promoter liefert RLS nur
+ * die eigenen Buchungen. Eine Tages-Sicht pro Promoter folgt mit Teil 2 (Guide).
+ */
+export async function listOwnSalesDays(fromDay: string): Promise<SalesDayRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sales_by_day")
+    .select("sale_day, sales_count, tickets, revenue_cents, commission_cents")
+    .gte("sale_day", fromDay)
+    .order("sale_day", { ascending: true });
+  if (error) throw new Error(`Verkaufstage laden fehlgeschlagen: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    sale_day: String(r.sale_day),
+    sales_count: Number(r.sales_count),
+    tickets: Number(r.tickets),
+    revenue_cents: Number(r.revenue_cents),
+    commission_cents: Number(r.commission_cents),
+  }));
+}
+
+/** Alle eigenen Verkäufe (inkl. Storno), neueste zuerst — ausdrücklich nach promoter_id gefiltert. */
+export async function listAllOwnBookings(promoterId: string): Promise<PromoterBooking[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(BOOKING_COLUMNS)
+    .eq("channel", "promoter")
+    .eq("promoter_id", promoterId)
+    .order("sold_at", { ascending: false });
+  if (error) throw new Error(`Verkäufe laden fehlgeschlagen: ${error.message}`);
+  return (data ?? []) as unknown as PromoterBooking[];
+}

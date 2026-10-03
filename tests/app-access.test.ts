@@ -182,6 +182,27 @@ describe.skipIf(!serverUp)("App-Zugang (Dev-Server auf 3001)", () => {
     expect(anon.location).toContain("/login");
   });
 
+  // E5.5b (Teil 1 nach der Diagnose E5.5): Dashboard über die Kopfzeile erreichbar
+  it("E5.5b: Promoter erreicht „Mein Dashboard“ über die Kopfzeile, Operator nicht", async () => {
+    const cookie = await sessionCookie("promoter@mmb-promoter.test", "promoter-test-2026");
+    const home = await get("/promoter", cookie);
+    expect(home.text).toContain('href="/promoter/dashboard"');
+    expect(home.text).toContain("Mein Dashboard");
+    const dash = await get("/promoter/dashboard", cookie);
+    expect(dash.status).toBe(200);
+    for (const t of ["Mein Dashboard", "Heute", "Gesamt", "Provision", "Offen (Rest im Bus)", "Abschlüsse der letzten 14 Tage", "Alle meine Verkäufe"]) {
+      expect(dash.text, t).toContain(t);
+    }
+    expect(dash.text).toContain('href="/promoter"');
+    const op = await sessionCookie("operator@mmb-promoter.test", "operator-test-2026");
+    const r = await get("/promoter/dashboard", op);
+    expect(r.status).toBe(307);
+    expect(r.location).toContain("/kein-zugang");
+    const anon = await get("/promoter/dashboard");
+    expect(anon.status).toBe(307);
+    expect(anon.location).toContain("/login");
+  });
+
   it("noindex überall: X-Robots-Tag + robots.txt", async () => {
     const res = await fetch(`${APP}/login`);
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
